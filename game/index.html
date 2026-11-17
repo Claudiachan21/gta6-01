@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solmar Bay — Open-World Crime</title>
+<link rel="stylesheet" href="./styles.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+</head>
+<body>
+<canvas id="game" aria-label="Solmar Bay: an open-world crime game. Explore the city on foot and by car, take missions, and stay ahead of the police."></canvas>
+
+<div id="hud" class="hidden">
+  <div id="top-left">
+    <div id="cash">$120</div>
+    <div id="objective">
+      <div id="objective-title">FREE ROAM</div>
+      <div id="objective-text">Explore Solmar Bay.</div>
+      <div id="objective-dist"></div>
+    </div>
+  </div>
+  <div id="stars">☆☆☆☆☆</div>
+  <div id="bottom-left">
+    <canvas id="minimap" width="200" height="200"></canvas>
+    <div id="health-wrap"><div id="health-bar"></div></div>
+    <div id="ammo"></div>
+  </div>
+  <div id="speed"></div>
+  <div id="hint"></div>
+  <div id="crosshair">+</div>
+  <div id="banner"><div id="banner-title"></div><div id="banner-sub"></div></div>
+  <div id="toast"></div>
+  <div id="vignette"></div>
+  <button id="btn-mute" type="button">♪</button>
+</div>
+
+<div id="menu" class="overlay">
+  <div class="panel">
+    <h1>SOLMAR BAY</h1>
+    <p class="tagline">An original open-world crime story — sun, sea and speed.</p>
+    <p id="save-info">No saved game yet.</p>
+    <button id="btn-continue" class="big hidden" type="button">CONTINUE</button>
+    <button id="btn-new" class="big" type="button">NEW GAME</button>
+    <button id="btn-howto" class="big ghost" type="button">HOW TO PLAY</button>
+    <div id="howto" class="hidden">
+      <p><b>WASD</b> move / drive · <b>Shift</b> run · <b>drag mouse</b> look · <b>Click</b> shoot · <b>R</b> reload · <b>E</b> enter / steal car · <b>Space</b> handbrake · <b>M</b> mute · <b>Esc</b> pause</p>
+      <p>Take missions from Dax, steal cars, lose the cops, collect cash stashes. Progress saves automatically.</p>
+    </div>
+    <p class="foot">100% original: its city, characters, vehicles, story, art and sound are all our own — nothing from Rockstar Games or any other commercial game.</p>
+  </div>
+</div>
+
+<div id="pause" class="overlay hidden">
+  <div class="panel">
+    <h1>PAUSED</h1>
+    <p class="tagline">Solmar Bay waits for no one. Well — except now.</p>
+    <button id="btn-resume" class="big" type="button">RESUME</button>
+    <button id="btn-restart" class="big ghost" type="button">RESTART (NEW GAME)</button>
+    <button id="btn-quit" class="big ghost" type="button">SAVE &amp; QUIT TO MENU</button>
+  </div>
+</div>
+
+<div id="busted" class="overlay hidden">
+  <div class="panel">
+    <h1 class="red">BUSTED</h1>
+    <p class="tagline">The Solmar Bay police caught up with Mara. Fine paid, heat cleared — back on the street.</p>
+    <button id="btn-busted" class="big" type="button">BACK ON THE STREET</button>
+  </div>
+</div>
+
+<div id="wasted" class="overlay hidden">
+  <div class="panel">
+    <h1 class="red">WASTED</h1>
+    <p class="tagline">Mara went down. The clinic patched her up — minus the bill.</p>
+    <button id="btn-wasted" class="big" type="button">BACK ON THE STREET</button>
+  </div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

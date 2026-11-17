@@ -1,0 +1,47 @@
+/* Solmar Bay HUD and menus: sun-soaked yellow on dark glass. */
+html, body { margin: 0; height: 100%; overflow: hidden; background: #0e1a24; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.hidden { display: none !important; }
+
+#hud { position: fixed; inset: 0; pointer-events: none; color: #fff; z-index: 5; }
+#hud button { pointer-events: auto; }
+#top-left { position: absolute; top: 16px; left: 18px; }
+#cash { font-size: 30px; font-weight: 800; color: #7dffb0; text-shadow: 0 2px 6px rgba(0,0,0,.8); }
+#objective { margin-top: 8px; background: rgba(10, 18, 26, .72); border-left: 4px solid #ffd94d; border-radius: 4px; padding: 10px 14px; max-width: 340px; }
+#objective-title { font-size: 12px; font-weight: 800; letter-spacing: 1.5px; color: #ffd94d; }
+#objective-text { font-size: 16px; font-weight: 600; margin-top: 3px; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
+#objective-dist { font-size: 13px; color: #cfe3f5; margin-top: 2px; }
+#stars { position: absolute; top: 14px; right: 22px; font-size: 30px; letter-spacing: 4px; color: rgba(255,255,255,.45); text-shadow: 0 2px 6px rgba(0,0,0,.8); }
+#stars.hot { color: #ffd94d; }
+#bottom-left { position: absolute; left: 18px; bottom: 18px; }
+#minimap { width: 200px; height: 200px; border-radius: 50%; border: 3px solid rgba(255,255,255,.75); box-shadow: 0 4px 18px rgba(0,0,0,.55); background: #10151c; }
+#health-wrap { margin-top: 10px; width: 200px; height: 12px; background: rgba(0,0,0,.6); border-radius: 6px; overflow: hidden; border: 1px solid rgba(255,255,255,.35); }
+#health-bar { height: 100%; width: 100%; background: #4dd07d; transition: width .2s; }
+#health-bar.low { background: #e84a3f; }
+#ammo { margin-top: 6px; font-size: 14px; font-weight: 700; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
+#speed { position: absolute; right: 22px; bottom: 52px; font-size: 28px; font-weight: 800; text-shadow: 0 2px 6px rgba(0,0,0,.8); }
+#hint { position: absolute; right: 22px; bottom: 18px; font-size: 13px; color: rgba(255,255,255,.85); text-shadow: 0 1px 3px rgba(0,0,0,.9); text-align: right; max-width: 520px; }
+#crosshair { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 26px; font-weight: 300; color: rgba(255,255,255,.9); text-shadow: 0 0 6px rgba(0,0,0,.9); display: none; }
+#crosshair.show { display: block; }
+#banner { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); text-align: center; display: none; text-shadow: 0 2px 10px rgba(0,0,0,.9); }
+#banner.show { display: block; }
+#banner-title { font-size: 40px; font-weight: 900; letter-spacing: 3px; color: #ffd94d; }
+#banner-sub { font-size: 17px; font-weight: 600; margin-top: 6px; max-width: 620px; }
+#toast { position: absolute; left: 50%; bottom: 110px; transform: translateX(-50%); background: rgba(10,18,26,.8); padding: 9px 18px; border-radius: 20px; font-size: 15px; font-weight: 600; display: none; }
+#toast.show { display: block; }
+#vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(200,30,20,.55) 100%); opacity: 0; }
+#btn-mute { position: absolute; top: 64px; right: 22px; width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(255,255,255,.5); background: rgba(10,18,26,.6); color: #fff; font-size: 17px; cursor: pointer; }
+
+.overlay { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; background: linear-gradient(180deg, rgba(8,20,32,.42), rgba(8,20,32,.68)); }
+.panel { text-align: center; color: #fff; max-width: 640px; padding: 32px 40px; }
+.panel h1 { font-size: 64px; font-weight: 900; letter-spacing: 6px; margin: 0; color: #ffd94d; text-shadow: 0 4px 24px rgba(0,0,0,.7); }
+.panel h1.red { color: #ff5a4d; }
+.tagline { font-size: 18px; font-weight: 600; margin: 8px 0 18px; text-shadow: 0 2px 6px rgba(0,0,0,.8); }
+#save-info { font-size: 14px; color: #cfe3f5; margin-bottom: 16px; }
+button.big { display: block; width: 300px; margin: 10px auto; padding: 13px 20px; font-size: 17px; font-weight: 800; letter-spacing: 2px; color: #12202c; background: #ffd94d; border: none; border-radius: 6px; cursor: pointer; }
+button.big:hover { background: #ffe47a; }
+button.big.ghost { background: rgba(255,255,255,.14); color: #fff; border: 1px solid rgba(255,255,255,.5); }
+button.big.ghost:hover { background: rgba(255,255,255,.24); }
+#howto { background: rgba(0,0,0,.45); border-radius: 8px; padding: 12px 18px; margin: 14px auto; font-size: 15px; text-align: left; max-width: 520px; }
+#howto p { margin: 8px 0; }
+.foot { font-size: 12.5px; color: rgba(255,255,255,.65); margin-top: 22px; line-height: 1.5; }
