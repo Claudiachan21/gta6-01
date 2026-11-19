@@ -97,6 +97,9 @@ function runShot(name) {
     // while software rendering keeps the frame count (and wall time) low.
     updateWorld(world, STEP, input);
     updateWorld(world, STEP, input);
+    // The combat shot hides the mission beacon: the firefight is the
+    // subject, and the 40-unit beam would dominate the frame.
+    if (plan.hideBeacon) world.missions.beacon.visible = false;
     // A fixed vista (the cover): camera over the sea, looking west at the
     // sunset skyline — lighthouse left, downtown right, water foreground.
     if (plan.vista) {

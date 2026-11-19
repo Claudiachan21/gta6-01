@@ -57,7 +57,7 @@ export function createCombat(scene) {
   const flash = new THREE.PointLight(0xffcc66, 0, 18, 2);
   scene.add(flash);
   const flashMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.6, 1.6),
+    new THREE.PlaneGeometry(1.0, 1.0),
     new THREE.MeshBasicMaterial({ map: flashTexture(), transparent: true, side: THREE.DoubleSide, depthWrite: false }),
   );
   flashMesh.visible = false;

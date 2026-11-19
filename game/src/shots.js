@@ -111,7 +111,7 @@ export function stageShot(name, world) {
     world.cameraRig.fovOverride = 72;
     addWanted(world.police, 2);
     world.police.cap = 2;
-    return { frames: 120, finalFire: true, noBanner: true, fallRivalAt: 60 };
+    return { frames: 120, finalFire: true, noBanner: true, fallRivalAt: 60, hideBeacon: true };
   }
 
   if (name === 'garage') {
