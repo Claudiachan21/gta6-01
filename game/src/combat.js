@@ -10,18 +10,22 @@ import { addWanted } from './police.js';
 const raycaster = new THREE.Raycaster();
 const SCREEN_CENTRE = new THREE.Vector2(0, 0);
 
-/** A soft radial glow for the muzzle flash (a hard square reads as a glitch). */
+/** A sharp star-burst for the muzzle flash (a soft glow reads as a lamp). */
 function flashTexture() {
   const canvas = document.createElement('canvas');
   canvas.width = 64;
   canvas.height = 64;
   const ctx = canvas.getContext('2d');
-  const gradient = ctx.createRadialGradient(32, 32, 2, 32, 32, 30);
-  gradient.addColorStop(0, 'rgba(255,255,240,1)');
-  gradient.addColorStop(0.35, 'rgba(255,224,102,0.9)');
-  gradient.addColorStop(1, 'rgba(255,180,40,0)');
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, 64, 64);
+  ctx.translate(32, 32);
+  ctx.fillStyle = 'rgba(255,236,160,0.95)';
+  for (let i = 0; i < 4; i += 1) {
+    ctx.fillRect(-3, -30, 6, 60);
+    ctx.rotate(Math.PI / 4);
+  }
+  ctx.fillStyle = 'rgba(255,255,250,1)';
+  ctx.beginPath();
+  ctx.arc(0, 0, 7, 0, Math.PI * 2);
+  ctx.fill();
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
@@ -135,7 +139,7 @@ export function firePistol(world) {
   muzzle.x += Math.sin(player.heading) * 1.1;
   muzzle.z += Math.cos(player.heading) * 1.1;
   muzzle.y = 1.5;
-  showFlash(combat, muzzle, 180, 0.09, world.camera);
+  showFlash(combat, muzzle, 120, 0.09, world.camera);
   world.audio.shot();
   world.effects.burst(muzzle, 0xffcc66, 6, 4);
   raycaster.setFromCamera(SCREEN_CENTRE, world.camera);
