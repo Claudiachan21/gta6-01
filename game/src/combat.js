@@ -10,6 +10,23 @@ import { addWanted } from './police.js';
 const raycaster = new THREE.Raycaster();
 const SCREEN_CENTRE = new THREE.Vector2(0, 0);
 
+/** A soft radial glow for the muzzle flash (a hard square reads as a glitch). */
+function flashTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  const gradient = ctx.createRadialGradient(32, 32, 2, 32, 32, 30);
+  gradient.addColorStop(0, 'rgba(255,255,240,1)');
+  gradient.addColorStop(0.35, 'rgba(255,224,102,0.9)');
+  gradient.addColorStop(1, 'rgba(255,180,40,0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 64, 64);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 function box(w, h, d, material, x, y, z) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
   mesh.position.set(x, y, z);
@@ -41,7 +58,7 @@ export function createCombat(scene) {
   scene.add(flash);
   const flashMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(1.6, 1.6),
-    new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.95, side: THREE.DoubleSide }),
+    new THREE.MeshBasicMaterial({ map: flashTexture(), transparent: true, side: THREE.DoubleSide, depthWrite: false }),
   );
   flashMesh.visible = false;
   scene.add(flashMesh);
