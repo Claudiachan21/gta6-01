@@ -32,7 +32,7 @@ function makePlayerMesh() {
   armL.position.set(-0.44, 1.5, 0);
   const armR = new THREE.Mesh(armGeometry, jacket);
   armR.position.set(0.44, 1.5, 0);
-  const gun = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.16, 0.5), new THREE.MeshLambertMaterial({ color: 0x8a8f98 }));
+  const gun = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.16, 0.5), new THREE.MeshLambertMaterial({ color: 0xb8bdc4 }));
   gun.position.set(0, -0.72, 0.12);
   armR.add(gun);
   group.add(torso, head, cap, legL, legR, armL, armR);

@@ -136,8 +136,8 @@ export function firePistol(world) {
   combat.ammo -= 1;
   combat.cooldown = 0.22;
   const muzzle = playerPosition(player).clone();
-  muzzle.x += Math.sin(player.heading) * 0.6 + Math.cos(player.heading) * 0.7;
-  muzzle.z += Math.cos(player.heading) * 0.6 - Math.sin(player.heading) * 0.7;
+  muzzle.x += Math.sin(player.heading) * 0.15 + Math.cos(player.heading) * 0.65;
+  muzzle.z += Math.cos(player.heading) * 0.15 - Math.sin(player.heading) * 0.65;
   muzzle.y = 0.78;
   showFlash(combat, muzzle, 120, 0.09, world.camera);
   world.audio.shot();
