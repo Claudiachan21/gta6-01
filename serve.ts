@@ -10,7 +10,11 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(fileURLToPath(new URL('./game', import.meta.url)));
 const args = process.argv.slice(2);
 const portIndex = args.indexOf('--port');
-const requested = portIndex === -1 ? 8080 : Number(args[portIndex + 1]);
+// PORT env var (e.g. in a container) wins over the flag, which wins over 8080.
+const envPort = Number(process.env.PORT);
+const requested = Number.isInteger(envPort) && envPort > 0 && envPort < 65536
+  ? envPort
+  : portIndex === -1 ? 8080 : Number(args[portIndex + 1]);
 const port = Number.isInteger(requested) && requested > 0 && requested < 65536 ? requested : 8080;
 
 const MIME: Record<string, string> = {

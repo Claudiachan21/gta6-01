@@ -1,65 +1,63 @@
 // The circular minimap: streets, blocks, the sea, Mara's arrow, police,
 // the mission marker and cash stashes, drawn on a 2D canvas each frame.
-import { STREETS, WORLD_HALF } from './config.js';
+import { GARAGE_POS, STREETS, WORLD_HALF } from './config.js';
 import { currentObjective } from './missions.js';
 import { playerPosition } from './player.js';
-
-function toMap(v, size) {
-  return ((v + WORLD_HALF) / (WORLD_HALF * 2)) * size;
-}
 
 export function drawMinimap(canvas, world) {
   const ctx = canvas.getContext('2d');
   const size = canvas.width;
   const scale = size / (WORLD_HALF * 2);
+  const px = (v) => ((v + WORLD_HALF) / (WORLD_HALF * 2)) * size;
+  const dot = (x, z, r, color) => {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(px(x), px(z), r, 0, Math.PI * 2);
+    ctx.fill();
+  };
   ctx.clearRect(0, 0, size, size);
   ctx.fillStyle = '#10151c';
   ctx.fillRect(0, 0, size, size);
+  // The sea, east of the beach.
   ctx.fillStyle = '#2e7fb8';
-  ctx.fillRect(toMap(WORLD_HALF, size), 0, size - toMap(WORLD_HALF, size), size);
+  ctx.fillRect(px(WORLD_HALF), 0, size - px(WORLD_HALF), size);
+  // Streets, then building footprints.
   ctx.fillStyle = '#3a4149';
   for (const s of STREETS) {
-    ctx.fillRect(0, toMap(s - 6, size), size, 12 * scale);
-    ctx.fillRect(toMap(s - 6, size), 0, 12 * scale, size);
+    ctx.fillRect(0, px(s - 6), size, 12 * scale);
+    ctx.fillRect(px(s - 6), 0, 12 * scale, size);
   }
   ctx.fillStyle = '#565e66';
-  for (const b of world.layout.buildings) {
-    ctx.fillRect(toMap(b.x - b.w / 2, size), toMap(b.z - b.d / 2, size), b.w * scale, b.d * scale);
-  }
+  for (const b of world.layout.buildings) ctx.fillRect(px(b.x - b.w / 2), px(b.z - b.d / 2), b.w * scale, b.d * scale);
+  // Cash stashes, coloured by kind.
   for (const stash of world.missions.stashes) {
-    if (stash.taken) continue;
-    ctx.fillStyle = '#7dffb0';
-    ctx.beginPath();
-    ctx.arc(toMap(stash.x, size), toMap(stash.z, size), 3, 0, Math.PI * 2);
-    ctx.fill();
+    if (!stash.taken) dot(stash.x, stash.z, 3, stash.kind === 'beach' ? '#ffd94d' : stash.kind === 'cold' ? '#7dc4ff' : '#7dffb0');
   }
+  // Sunset Auto: a teal G so the player can always find the chop shop.
+  ctx.fillStyle = '#1f8a7a';
+  ctx.fillRect(px(GARAGE_POS.x) - 5, px(GARAGE_POS.z) - 5, 10, 10);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 8px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('G', px(GARAGE_POS.x), px(GARAGE_POS.z) + 3);
+  // The pulsing mission diamond.
   const objective = currentObjective(world.missions);
   if (objective && objective.x !== null) {
     const pulse = 5 + Math.sin(world.time * 5) * 2;
     ctx.fillStyle = '#ffd94d';
     ctx.save();
-    ctx.translate(toMap(objective.x, size), toMap(objective.z, size));
+    ctx.translate(px(objective.x), px(objective.z));
     ctx.rotate(Math.PI / 4);
     ctx.fillRect(-pulse / 2, -pulse / 2, pulse, pulse);
     ctx.restore();
   }
-  for (const rival of world.combat.rivals) {
-    if (!rival.alive) continue;
-    ctx.fillStyle = '#ff4444';
-    ctx.beginPath();
-    ctx.arc(toMap(rival.mesh.position.x, size), toMap(rival.mesh.position.z, size), 3.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  for (const cop of world.police.cops) {
-    ctx.fillStyle = '#4d8dff';
-    ctx.beginPath();
-    ctx.arc(toMap(cop.mesh.position.x, size), toMap(cop.mesh.position.z, size), 4, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  for (const rival of world.combat.rivals) if (rival.alive) dot(rival.mesh.position.x, rival.mesh.position.z, 3.5, '#ff4444');
+  for (const cop of world.police.cops) dot(cop.mesh.position.x, cop.mesh.position.z, 4, '#4d8dff');
+  // Mara's arrow, rotated to her heading.
   const pos = playerPosition(world.player);
   const heading = world.player.onFoot ? world.player.heading : world.player.car.heading;
   ctx.save();
-  ctx.translate(toMap(pos.x, size), toMap(pos.z, size));
+  ctx.translate(px(pos.x), px(pos.z));
   ctx.rotate(Math.PI - heading);
   ctx.fillStyle = '#ffffff';
   ctx.strokeStyle = '#111111';
@@ -74,6 +72,5 @@ export function drawMinimap(canvas, world) {
   ctx.restore();
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 11px system-ui, sans-serif';
-  ctx.textAlign = 'center';
   ctx.fillText('N', size / 2, 12);
 }

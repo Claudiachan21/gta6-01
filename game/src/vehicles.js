@@ -1,9 +1,9 @@
-// Cars: low-poly box-built meshes (sedan, sport, van, taxi, police) and the
-// traffic system — cars drive their lanes, turn at intersections and brake
-// for the car ahead.
+// Cars: low-poly box-built meshes and the traffic system (lanes, turns,
+// braking for the car ahead and for red lights).
 import * as THREE from 'three';
 import { COLORS, STREETS, TUNING, WORLD_HALF } from './config.js';
 import { nearestStreet, randomRoadPoint } from './city.js';
+import { LIGHT_INTERSECTIONS, lightFor } from './traffic-lights.js';
 
 const WHEEL_GEOMETRY = new THREE.CylinderGeometry(0.38, 0.38, 0.3, 10);
 const WHEEL_MATERIAL = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
@@ -16,22 +16,39 @@ function box(w, h, d, material, x, y, z) {
   return mesh;
 }
 
-/** Build a car mesh of `kind` in `color`; returns { group, wheels, lightBar }. */
+/** Build a car mesh of `kind` in `color`; returns { group, wheels, lightBar, paint }. */
 export function createCarMesh(kind, color) {
   const group = new THREE.Group();
   const paint = new THREE.MeshLambertMaterial({ color });
-  const long = kind === 'van' ? 5.0 : kind === 'sport' ? 4.0 : 4.3;
-  const wide = kind === 'van' ? 2.1 : 1.9;
+  const long = kind === 'van' || kind === 'truck' ? 5.0 : kind === 'limo' ? 6.2 : kind === 'sport' ? 4.0 : kind === 'pickup' ? 4.8 : kind === 'muscle' ? 4.5 : 4.3;
+  const wide = kind === 'van' || kind === 'truck' ? 2.1 : kind === 'muscle' ? 2.05 : 1.9;
   group.add(box(wide, 0.62, long, paint, 0, 0.62, 0));
-  if (kind === 'van') {
+  if (kind === 'truck') {
+    group.add(box(wide - 0.1, 1.9, long - 1.6, new THREE.MeshLambertMaterial({ color: 0xe8e4d8 }), 0, 1.55, -0.6));
+    group.add(box(wide - 0.3, 0.6, 0.2, GLASS_MATERIAL, 0, 1.2, long / 2 - 0.4));
+  } else if (kind === 'van') {
     group.add(box(wide - 0.1, 0.85, long - 1.2, paint, 0, 1.3, 0));
     group.add(box(wide - 0.3, 0.6, 0.2, GLASS_MATERIAL, 0, 1.25, long / 2 - 0.5));
+    if (color === COLORS.courierTeal) {
+      group.add(box(wide + 0.04, 0.24, long * 0.6, new THREE.MeshLambertMaterial({ color: 0xf2f2f2 }), 0, 1.05, 0));
+    }
+  } else if (kind === 'pickup') {
+    group.add(box(wide - 0.3, 0.55, long * 0.3, GLASS_MATERIAL, 0, 1.18, long * 0.18));
+    group.add(box(wide - 0.25, 0.12, long * 0.28, paint, 0, 1.48, long * 0.18));
+    group.add(box(wide - 0.2, 0.5, long * 0.42, new THREE.MeshLambertMaterial({ color: 0x2a2a2a }), 0, 0.95, -long * 0.24));
   } else {
     group.add(box(wide - 0.3, 0.55, long * 0.45, GLASS_MATERIAL, 0, 1.18, -long * 0.05));
     group.add(box(wide - 0.25, 0.12, long * 0.42, paint, 0, 1.48, -long * 0.05));
   }
   if (kind === 'sport') {
     group.add(box(wide + 0.1, 0.1, 0.5, paint, 0, 1.05, -long / 2 + 0.1));
+  }
+  if (kind === 'muscle') {
+    group.add(box(0.9, 0.16, 1.1, new THREE.MeshLambertMaterial({ color: 0x1a1a1a }), 0, 0.98, long * 0.22));
+    group.add(box(wide + 0.06, 0.1, 0.4, paint, 0, 1.02, -long / 2 + 0.15));
+  }
+  if (kind === 'limo') {
+    group.add(box(0.5, 0.5, 0.5, new THREE.MeshLambertMaterial({ color: 0xc9a227 }), 0, 1.05, long / 2 - 0.5));
   }
   if (kind === 'taxi') {
     group.add(box(0.9, 0.28, 0.5, new THREE.MeshLambertMaterial({ color: 0xffd94d, emissive: 0x554400 }), 0, 1.68, 0));
@@ -66,11 +83,11 @@ export function createCarMesh(kind, color) {
     group.add(wheel);
     wheels.push(wheel);
   }
-  return { group, wheels, lightBar };
+  return { group, wheels, lightBar, paint };
 }
 
 function makeCar(scene, kind, color, x, z, heading) {
-  const { group, wheels, lightBar } = createCarMesh(kind, color);
+  const { group, wheels, lightBar, paint } = createCarMesh(kind, color);
   group.position.set(x, 0, z);
   group.rotation.y = heading;
   scene.add(group);
@@ -78,6 +95,7 @@ function makeCar(scene, kind, color, x, z, heading) {
     mesh: group,
     wheels,
     lightBar,
+    paintMaterial: paint,
     kind,
     color,
     heading,
@@ -88,22 +106,25 @@ function makeCar(scene, kind, color, x, z, heading) {
     dir: 1,
     flash: 0,
     damage: 0,
+    stolen: false,
+    jobCar: false,
   };
 }
 
 /** Spawn flowing traffic on the avenues. */
 export function createTraffic(scene, layout, rng, count) {
   const cars = [];
-  const kinds = ['sedan', 'sedan', 'sedan', 'sport', 'van', 'taxi'];
+  const kinds = ['sedan', 'sedan', 'sedan', 'sport', 'van', 'taxi', 'pickup', 'muscle', 'limo', 'truck'];
   for (let i = 0; i < count; i += 1) {
     const axis = rng.chance(0.5) ? 'x' : 'z';
     const point = randomRoadPoint(rng, axis);
     const dir = rng.chance(0.5) ? 1 : -1;
     const kind = rng.pick(kinds);
+    const courier = kind === 'van' && rng.chance(0.45);
     const car = makeCar(
       scene,
       kind,
-      kind === 'taxi' ? 0xe8c832 : rng.pick(COLORS.carPaint),
+      kind === 'taxi' ? 0xe8c832 : courier ? COLORS.courierTeal : rng.pick(COLORS.carPaint),
       point.x,
       point.z,
       axis === 'x' ? (dir === 1 ? Math.PI / 2 : -Math.PI / 2) : dir === 1 ? 0 : Math.PI,
@@ -125,7 +146,7 @@ export function createParkedCars(scene, layout, rng, count) {
     const street = rng.pick(STREETS);
     const along = rng.range(-170, 170);
     const side = rng.pick([-4.6, 4.6]);
-    const kind = rng.pick(['sedan', 'sedan', 'sport', 'van']);
+    const kind = rng.pick(['sedan', 'sedan', 'sport', 'van', 'pickup', 'muscle', 'limo', 'truck']);
     const car = makeCar(
       scene,
       kind,
@@ -169,10 +190,23 @@ function carAhead(car, cars, gap) {
 }
 
 /** Drive one traffic car along its lane; it may turn at an intersection. */
-export function updateTrafficCar(car, dt, cars, rng) {
+export function updateTrafficCar(car, dt, cars, rng, lights) {
   const pos = car.mesh.position;
   const cruise = TUNING.trafficSpeed;
-  car.speed += ((carAhead(car, cars, 9) ? 0 : cruise) - car.speed) * Math.min(1, dt * 2);
+  // Red light ahead: ease to a stop 4–12 units before the intersection.
+  // A car already inside the crossing keeps going to clear it.
+  let stopped = false;
+  if (lights && lightFor(lights, car.axis) === 'red') {
+    for (const spot of LIGHT_INTERSECTIONS) {
+      const along = car.axis === 'z' ? spot.z - pos.z : spot.x - pos.x;
+      const lateral = car.axis === 'z' ? Math.abs(spot.x - pos.x) : Math.abs(spot.z - pos.z);
+      if (lateral < 6 && along * car.dir > 4 && along * car.dir < 12) {
+        stopped = true;
+        break;
+      }
+    }
+  }
+  car.speed += ((stopped || carAhead(car, cars, 9) ? 0 : cruise) - car.speed) * Math.min(1, dt * 2);
   const step = car.speed * dt;
   if (car.axis === 'x') pos.x += car.dir * step;
   else pos.z += car.dir * step;

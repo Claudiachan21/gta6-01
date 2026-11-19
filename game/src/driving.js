@@ -2,9 +2,18 @@
 // throttle and steering, grip that bleeds sideways slide, the handbrake,
 // and collisions with buildings, other cars and pedestrians.
 import * as THREE from 'three';
-import { TUNING } from './config.js';
+import { HANDLING, TUNING } from './config.js';
 import { collideCircle } from './city.js';
 import { knockPedDown, scatterPeds } from './pedestrians.js';
+
+/** Blink a cruiser's light bar (shared by chases and roadblocks). */
+export function updateLightBar(car, dt) {
+  if (!car.lightBar) return;
+  car.flash += dt * 9;
+  const on = Math.sin(car.flash) > 0;
+  car.lightBar.userData.red.material.emissiveIntensity = on ? 2.2 : 0.15;
+  car.lightBar.userData.blue.material.emissiveIntensity = on ? 0.15 : 2.2;
+}
 
 function collideWithCars(car, cars, events) {
   const pos = car.mesh.position;
@@ -48,10 +57,12 @@ function collideWithPeds(car, peds, events) {
 /** Advance one car a step under `axes` { throttle, steer, handbrake }. */
 export function driveCar(dt, car, axes, world) {
   const events = { crashed: false, hitPed: false };
-  const maxSpeed = car.state === 'police' ? TUNING.copMaxSpeed : TUNING.carMaxSpeed;
-  if (axes.throttle > 0) car.speed += TUNING.carAccel * dt;
+  const handling = HANDLING[car.kind] ?? HANDLING.sedan;
+  // Damage slows the car down: a wreck tops out near half speed.
+  const maxSpeed = handling.max * (1 - (car.damage ?? 0) * 0.45);
+  if (axes.throttle > 0) car.speed += handling.accel * dt;
   else if (axes.throttle < 0) {
-    car.speed += car.speed > 0.5 ? -TUNING.carBrake * dt : -TUNING.carAccel * 0.5 * dt;
+    car.speed += car.speed > 0.5 ? -TUNING.carBrake * dt : -handling.accel * 0.5 * dt;
   } else {
     car.speed -= car.speed * Math.min(1, dt * 0.6);
   }
@@ -59,7 +70,7 @@ export function driveCar(dt, car, axes, world) {
   car.speed = Math.max(-TUNING.carMaxReverse, Math.min(maxSpeed, car.speed));
   const speedFactor = Math.min(1, Math.abs(car.speed) / 8);
   const grip = axes.handbrake ? 0.35 : 1;
-  car.heading += axes.steer * TUNING.carTurn * speedFactor * grip * dt * (car.speed >= 0 ? 1 : -1);
+  car.heading += axes.steer * handling.turn * speedFactor * grip * dt * (car.speed >= 0 ? 1 : -1);
   const pos = car.mesh.position;
   const wantX = pos.x + Math.sin(car.heading) * car.speed * dt;
   const wantZ = pos.z + Math.cos(car.heading) * car.speed * dt;
@@ -68,19 +79,16 @@ export function driveCar(dt, car, axes, world) {
   collideCircle(pos, TUNING.carRadius, world.layout);
   if ((pos.x !== wantX || pos.z !== wantZ) && Math.abs(car.speed) > 5) {
     events.crashed = true;
+    car.damage = Math.min(1, (car.damage ?? 0) + 0.09);
     car.speed *= 0.45;
   }
   collideWithCars(car, world.allCars, events);
   collideWithPeds(car, world.peds, events);
+  if (events.crashed) car.damage = Math.min(1, (car.damage ?? 0) + 0.05);
   car.mesh.rotation.y = car.heading;
   const spin = (car.speed * dt) / 0.38;
   for (const wheel of car.wheels) wheel.rotation.x += spin;
-  if (car.lightBar) {
-    car.flash += dt * 9;
-    const on = Math.sin(car.flash) > 0;
-    car.lightBar.userData.red.material.emissiveIntensity = on ? 2.2 : 0.15;
-    car.lightBar.userData.blue.material.emissiveIntensity = on ? 0.15 : 2.2;
-  }
+  updateLightBar(car, dt);
   return events;
 }
 

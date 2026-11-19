@@ -1,8 +1,7 @@
-// Story and missions: three jobs for Mara Solis in Solmar Bay, each a
-// chain of objectives with a beacon marker, plus cash stashes hidden
-// around the city as a free-roam activity.
+// Story and missions: six jobs for Mara Solis, each a chain of objectives
+// with a beacon marker, plus twelve cash stashes as a free-roam activity.
 import * as THREE from 'three';
-import { addWanted, clearWanted } from './police.js';
+import { addWanted, clearWanted, setWanted } from './police.js';
 import { spawnCar } from './vehicles.js';
 import { clearRivals, rivalsAlive, spawnRivals } from './combat.js';
 import { playerPosition } from './player.js';
@@ -40,24 +39,58 @@ export const MISSIONS = [
       { text: 'Escape to the safe house', type: 'goto', x: -132, z: -132 },
     ],
   },
+  {
+    id: 'sunset-run',
+    title: 'MISSION 4 — SUNSET RUN',
+    briefing: 'A buyer at the stadium pays double if the package lands before the match starts. Eighty seconds — go.',
+    reward: 400,
+    steps: [
+      { text: 'Pick up the package at Coral Plaza', type: 'goto', x: 66, z: -66 },
+      { text: 'Reach the stadium before time runs out', type: 'timed', x: -134, z: 154, seconds: 80 },
+    ],
+  },
+  {
+    id: 'last-stand',
+    title: 'MISSION 5 — LAST STAND',
+    briefing: 'Every cruiser in Solmar Bay is coming for you. Stay hot, stay moving, survive ninety seconds.',
+    reward: 600,
+    steps: [
+      { text: 'Survive the 5-star heat', type: 'survive', seconds: 90 },
+    ],
+  },
+  {
+    id: 'neon-heist',
+    title: 'MISSION 6 — NEON HEIST',
+    briefing: 'One muscle car, one harbor, one night. Take it quiet, bring it to Sunset Auto before dawn.',
+    reward: 800,
+    steps: [
+      { text: 'Steal the muscle car at the harbor', type: 'steal', x: 176, z: -100 },
+      { text: 'Deliver it to Sunset Auto before dawn', type: 'timed', x: 22, z: 154, seconds: 120 },
+    ],
+  },
 ];
 
-const RIVAL_SPOTS = [
+export const RIVAL_SPOTS = [
   { x: 170, z: -124 },
   { x: 182, z: -140 },
   { x: 170, z: -144 },
   { x: 184, z: -120 },
 ];
 
-const STASH_SPOTS = [
-  { x: -168, z: -168 },
-  { x: 168, z: -168 },
-  { x: -168, z: 168 },
-  { x: 168, z: 168 },
-  { x: -84, z: -84 },
-  { x: 84, z: -84 },
-  { x: -84, z: 84 },
-  { x: 84, z: 84 },
+// kind: normal $50 · beach $75 (buried in the sand) · cold $75 (only when clean).
+export const STASH_SPOTS = [
+  { x: -168, z: -168, kind: 'normal' },
+  { x: 168, z: -168, kind: 'normal' },
+  { x: -168, z: 168, kind: 'normal' },
+  { x: 168, z: 168, kind: 'normal' },
+  { x: -84, z: -84, kind: 'normal' },
+  { x: 84, z: -84, kind: 'normal' },
+  { x: -84, z: 84, kind: 'normal' },
+  { x: 84, z: 84, kind: 'normal' },
+  { x: 190, z: 60, kind: 'beach' },
+  { x: 190, z: -60, kind: 'beach' },
+  { x: 0, z: 0, kind: 'cold' },
+  { x: -44, z: 132, kind: 'cold' },
 ];
 
 function makeBeacon() {
@@ -78,7 +111,7 @@ function makeBeacon() {
   return group;
 }
 
-function makeStashMesh() {
+function makeStashMesh(kind) {
   const group = new THREE.Group();
   const box = new THREE.Mesh(
     new THREE.BoxGeometry(0.9, 0.6, 0.6),
@@ -86,9 +119,10 @@ function makeStashMesh() {
   );
   box.position.y = 0.7;
   box.castShadow = true;
+  const glowColor = kind === 'beach' ? 0xffd94d : kind === 'cold' ? 0x7dc4ff : 0x7dffb0;
   const glow = new THREE.Mesh(
     new THREE.SphereGeometry(0.5, 8, 8),
-    new THREE.MeshBasicMaterial({ color: 0x7dffb0, transparent: true, opacity: 0.5 }),
+    new THREE.MeshBasicMaterial({ color: glowColor, transparent: true, opacity: 0.5 }),
   );
   glow.position.y = 0.7;
   group.add(box, glow);
@@ -100,11 +134,11 @@ export function createMissions(scene, save) {
   const beacon = makeBeacon();
   scene.add(beacon);
   const stashes = STASH_SPOTS.map((spot, i) => {
-    const mesh = makeStashMesh();
+    const mesh = makeStashMesh(spot.kind);
     mesh.position.set(spot.x, 0, spot.z);
     mesh.visible = !(save && save.stashesTaken.includes(i));
     scene.add(mesh);
-    return { ...spot, mesh, taken: mesh.visible === false, index: i };
+    return { ...spot, mesh, taken: mesh.visible === false, index: i, warnedAt: -99 };
   });
   return {
     index: save ? save.missionIndex : 0,
@@ -115,6 +149,8 @@ export function createMissions(scene, save) {
     stashes,
     targetCar: null,
     banner: null,
+    timer: null,
+    lastAlarm: -1,
   };
 }
 
@@ -135,6 +171,36 @@ function moveBeacon(missions, x, z) {
   missions.beacon.position.set(x, 0, z);
 }
 
+/** Set up the current step: beacon, countdown, rivals, heat. */
+function enterStep(world) {
+  const missions = world.missions;
+  const step = MISSIONS[missions.index].steps[missions.step];
+  missions.timer = null;
+  missions.lastAlarm = -1;
+  if (step.type === 'clear') {
+    spawnRivals(world.scene, world.combat, RIVAL_SPOTS);
+    moveBeacon(missions, 176, -132);
+  } else if (step.type === 'escape' || step.type === 'survive') {
+    moveBeacon(missions, null, null);
+    if (step.type === 'survive') {
+      missions.timer = step.seconds;
+      setWanted(world.police, 5);
+      world.police.cap = 6;
+    }
+  } else if (step.type === 'timed') {
+    missions.timer = step.seconds;
+    moveBeacon(missions, step.x, step.z);
+  } else {
+    moveBeacon(missions, step.x ?? null, step.z ?? null);
+  }
+}
+
+/** Jump an active mission to a step (screenshot staging). */
+export function jumpToStep(world, step) {
+  world.missions.step = step;
+  enterStep(world);
+}
+
 /** Start mission `index` for the world: brief the player, place the marker. */
 export function startMission(world, index) {
   const missions = world.missions;
@@ -145,14 +211,17 @@ export function startMission(world, index) {
   missions.banner = { title: mission.title, sub: mission.briefing };
   if (index === 1) {
     const car = spawnCar(world.scene, 'sport', 0xc23b2e, -88, 88, Math.PI / 2);
+    car.jobCar = true;
     world.allCars.push(car);
     missions.targetCar = car;
-    moveBeacon(missions, -88, 88);
-  } else if (index === 2) {
-    moveBeacon(missions, 176, -132);
-  } else {
-    moveBeacon(missions, mission.steps[0].x, mission.steps[0].z);
+  } else if (index === 5) {
+    const car = spawnCar(world.scene, 'muscle', 0x1a1a1a, 176, -100, Math.PI);
+    car.jobCar = true;
+    world.allCars.push(car);
+    missions.targetCar = car;
+    world.daynight.tod = 21.5;
   }
+  enterStep(world);
   world.audio.jingle();
 }
 
@@ -168,11 +237,20 @@ export function updateMissions(dt, world) {
     stash.mesh.rotation.y += dt * 1.5;
     stash.mesh.position.y = Math.sin(world.time * 2 + stash.index) * 0.15;
     if (Math.hypot(pos.x - stash.x, pos.z - stash.z) < 2.6) {
+      if (stash.kind === 'cold' && world.police.wanted > 0) {
+        if (world.time - stash.warnedAt > 8) {
+          stash.warnedAt = world.time;
+          world.hud.toast('Too hot — lose the cops first.');
+        }
+        continue;
+      }
       stash.taken = true;
       stash.mesh.visible = false;
-      player.cash += 50;
+      const value = stash.kind === 'normal' ? 50 : 75;
+      player.cash += value;
+      world.stats.cashEarned += value;
       world.audio.pickup();
-      world.hud.toast('Cash stash found: +$50');
+      world.hud.toast(`Cash stash found: +$${value}`);
       world.effects.burst(new THREE.Vector3(stash.x, 1, stash.z), 0x7dffb0, 14, 4);
     }
   }
@@ -180,27 +258,58 @@ export function updateMissions(dt, world) {
   if (!missions.active || missions.index >= MISSIONS.length) return null;
   const mission = MISSIONS[missions.index];
   const step = mission.steps[missions.step];
-  let advance = false;
-  if (step.type === 'goto' || step.type === 'deliver') {
-    if (Math.hypot(pos.x - step.x, pos.z - step.z) < 7) advance = true;
-  } else if (step.type === 'steal') {
-    if (!player.onFoot && player.car === missions.targetCar) {
-      advance = true;
-      addWanted(world.police, 2);
-      world.hud.toast('The Comet GT is yours — now lose the cops!');
+
+  // Countdown steps: tick, beep when low, fail the job when it runs out.
+  if (missions.timer !== null) {
+    const running = step.type !== 'survive' || world.police.wanted > 0;
+    if (running) {
+      missions.timer -= dt;
+      const whole = Math.ceil(missions.timer);
+      if (whole <= 10 && whole !== missions.lastAlarm && whole > 0) {
+        missions.lastAlarm = whole;
+        world.audio.alarm();
+      }
+      if (missions.timer <= 0) {
+        if (step.type === 'survive') {
+          missions.step += 1;
+        } else {
+          missions.step = 0;
+          missions.timer = null;
+          world.hud.toast('Too slow — Dax wants another run.');
+          enterStep(world);
+          return null;
+        }
+      }
     }
-  } else if (step.type === 'escape') {
-    if (world.police.wanted === 0) advance = true;
-  } else if (step.type === 'clear') {
-    if (rivalsAlive(world.combat) === 0) advance = true;
+  }
+
+  let advance = missions.timer !== null && step.type === 'survive' && missions.step >= mission.steps.length;
+  if (!advance) {
+    if (step.type === 'goto' || step.type === 'deliver' || step.type === 'timed') {
+      if (Math.hypot(pos.x - step.x, pos.z - step.z) < 7) advance = true;
+    } else if (step.type === 'steal') {
+      if (!player.onFoot && player.car === missions.targetCar) {
+        advance = true;
+        addWanted(world.police, 2);
+        world.hud.toast(missions.index === 5 ? 'The muscle car is yours — now run it to the garage!' : 'The Comet GT is yours — now lose the cops!');
+      }
+    } else if (step.type === 'escape') {
+      if (world.police.wanted === 0) advance = true;
+    } else if (step.type === 'clear') {
+      if (rivalsAlive(world.combat) === 0) advance = true;
+    }
   }
   if (!advance) return null;
-  missions.step += 1;
+  if (!(step.type === 'survive' && missions.timer !== null && missions.timer <= 0)) missions.step += 1;
   world.audio.pickup();
   if (missions.step >= mission.steps.length) {
     missions.active = false;
+    missions.timer = null;
     player.cash += mission.reward;
+    world.stats.cashEarned += mission.reward;
+    world.stats.missionsDone += 1;
     clearWanted(world.police);
+    world.police.cap = null;
     missions.banner = { title: 'MISSION COMPLETE', sub: `${mission.title} — +$${mission.reward}` };
     world.audio.jingle();
     if (missions.index >= MISSIONS.length - 1) {
@@ -212,15 +321,7 @@ export function updateMissions(dt, world) {
     moveBeacon(missions, null, null);
     return 'done';
   }
-  const next = mission.steps[missions.step];
-  if (next.type === 'clear') {
-    spawnRivals(world.scene, world.combat, RIVAL_SPOTS);
-    moveBeacon(missions, 176, -132);
-  } else if (next.type === 'escape') {
-    moveBeacon(missions, null, null);
-  } else {
-    moveBeacon(missions, next.x, next.z);
-  }
+  enterStep(world);
   return 'advanced';
 }
 

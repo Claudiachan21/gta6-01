@@ -27,6 +27,17 @@ export function createInput(canvas) {
     wasPressed(code) {
       return pressed.has(code);
     },
+    /**
+     * Like wasPressed, but consumes the press: the next fixed step in the
+     * same frame will not see it again. Use for one-shot actions handled
+     * inside the fixed-step loop (enter/exit car, garage keys), where a
+     * single key press must fire exactly once per frame.
+     */
+    takePressed(code) {
+      if (!pressed.has(code)) return false;
+      pressed.delete(code);
+      return true;
+    },
     mouseWasPressed() {
       return mousePressed;
     },

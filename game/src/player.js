@@ -99,6 +99,7 @@ export function tryEnterCar(player, world) {
   if (!car) return null;
   const stolen = car.state !== 'player';
   car.state = 'player';
+  if (stolen) car.stolen = true;
   player.car = car;
   player.onFoot = false;
   player.mesh.visible = false;
@@ -106,7 +107,7 @@ export function tryEnterCar(player, world) {
 }
 
 /** Step out of the car beside it; the car stays parked where it stops. */
-export function exitCar(player) {
+export function exitCar(player, world) {
   const car = player.car;
   if (!car) return;
   car.state = 'parked';

@@ -1,7 +1,7 @@
 // The world: builds the scene, the city, traffic, pedestrians, the player
 // and every system, then advances them all one fixed step at a time.
 import * as THREE from 'three';
-import { COLORS, KEYS, START_CASH, TUNING } from './config.js';
+import { COLORS, HANDLING, KEYS, START_CASH, TUNING } from './config.js';
 import { createRandom } from './random.js';
 import { createCityLayout } from './city.js';
 import { buildCityMeshes } from './buildings.js';
@@ -17,9 +17,17 @@ import { createEffects } from './effects.js';
 import { createAudio } from './audio.js';
 import { addShake, createCameraRig, updateCamera } from './camera.js';
 import { createHUD } from './hud.js';
+import { createDayNight, updateDayNight } from './daynight.js';
+import { buildLandmarks, districtAt, updateLandmarks } from './landmarks.js';
+import { createGarage, updateGarage } from './garage.js';
+import { createTrafficLights, updateTrafficLights } from './traffic-lights.js';
 
 function pressedAny(input, codes) {
   return codes.some((code) => input.wasPressed(code));
+}
+
+function takeAny(input, codes) {
+  return codes.some((code) => input.takePressed(code));
 }
 
 /** Build a whole Solmar Bay from a seed and an optional save. */
@@ -31,7 +39,8 @@ export function createWorld(seed, save) {
   const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
   camera.position.set(0, 40, 80);
 
-  scene.add(new THREE.HemisphereLight(0xbcd9ff, 0xe8d9b0, 1.15));
+  const hemi = new THREE.HemisphereLight(0xbcd9ff, 0xe8d9b0, 1.15);
+  scene.add(hemi);
   const sun = new THREE.DirectionalLight(COLORS.sun, 2.6);
   sun.position.set(140, 200, 80);
   sun.castShadow = true;
@@ -46,10 +55,14 @@ export function createWorld(seed, save) {
   scene.add(sun);
 
   const layout = createCityLayout(rng);
-  buildCityMeshes(scene, layout);
+  const { sideMaterials } = buildCityMeshes(scene, layout);
   buildGround(scene, layout);
-  buildProps(scene, layout, rng);
-  const traffic = createTraffic(scene, layout, rng, 16);
+  const props = buildProps(scene, layout, rng);
+  const landmarks = buildLandmarks(scene, layout, rng);
+  const garage = createGarage(scene, layout);
+  const lights = createTrafficLights(scene);
+  const daynight = createDayNight(scene, sun, hemi, sideMaterials, props.userData.lampHeadMaterial);
+  const traffic = createTraffic(scene, layout, rng, 20);
   const parked = createParkedCars(scene, layout, rng, 10);
   const peds = createPedestrians(scene, rng, 24);
   const spawn = save ? save.player : { x: 0, z: 88, heading: Math.PI };
@@ -61,6 +74,10 @@ export function createWorld(seed, save) {
     scene,
     camera,
     layout,
+    landmarks,
+    garage,
+    lights,
+    daynight,
     traffic,
     parked,
     allCars: [...traffic, ...parked],
@@ -73,8 +90,13 @@ export function createWorld(seed, save) {
     audio: createAudio(),
     cameraRig: createCameraRig(camera),
     hud: createHUD(),
+    stats: save && save.stats
+      ? { ...save.stats }
+      : { missionsDone: 0, carsSold: 0, cashEarned: 0, playTime: 0 },
+    district: districtAt(spawn.x, spawn.z),
     time: 0,
     screen: 'title',
+    photo: false,
     nextMissionAt: null,
     lastDamageAt: -99,
   };
@@ -86,12 +108,16 @@ export function createWorld(seed, save) {
  */
 export function updateWorld(world, dt, input) {
   world.time += dt;
+  updateDayNight(dt, world.daynight);
+  updateTrafficLights(dt, world.lights);
+  updateLandmarks(dt, world.landmarks, world.daynight, world.camera, world.time);
   for (const car of world.traffic) {
-    if (car.state === 'traffic') updateTrafficCar(car, dt, world.allCars, world.rng);
+    if (car.state === 'traffic') updateTrafficCar(car, dt, world.allCars, world.rng, world.lights);
   }
-  updatePeds(dt, world.peds, world.rng);
+  updatePeds(dt, world.peds, world.rng, world.daynight);
   world.effects.update(dt);
   if (world.screen !== 'play') return null;
+  world.stats.playTime += dt;
 
   const player = world.player;
   if (!world.missions.active && !world.missions.storyDone && world.nextMissionAt !== null && world.time >= world.nextMissionAt) {
@@ -99,7 +125,14 @@ export function updateWorld(world, dt, input) {
     startMission(world, world.missions.index);
   }
 
-  if (pressedAny(input, KEYS.enterCar)) {
+  // New district, new toast — the city announces itself as Mara crosses it.
+  const district = districtAt(playerPosition(player).x, playerPosition(player).z);
+  if (district !== world.district) {
+    world.district = district;
+    world.hud.showDistrict(district);
+  }
+
+  if (takeAny(input, KEYS.enterCar)) {
     if (player.onFoot) {
       const got = tryEnterCar(player, world);
       if (got) {
@@ -112,16 +145,18 @@ export function updateWorld(world, dt, input) {
         world.hud.toast('No car nearby — get closer and press E.');
       }
     } else {
-      exitCar(player);
+      exitCar(player, world);
       world.audio.click();
     }
   }
+
+  updateGarage(dt, world, input);
 
   if (player.onFoot) {
     updateOnFoot(dt, player, input, world.cameraRig.yaw, world);
     player.aiming = input.mouseIsDown();
     if (input.mouseIsDown()) firePistol(world);
-    if (pressedAny(input, KEYS.reload) && world.combat.ammo < TUNING.pistolAmmo && world.combat.reloading <= 0) {
+    if (takeAny(input, KEYS.reload) && world.combat.ammo < TUNING.pistolAmmo && world.combat.reloading <= 0) {
       world.combat.reloading = 1.1;
     }
   } else {
@@ -130,6 +165,10 @@ export function updateWorld(world, dt, input) {
     if (events.crashed) {
       addShake(world.cameraRig, 0.5);
       world.audio.thud();
+      world.effects.sparks(player.car.mesh.position);
+      world.effects.smoke(player.car.mesh.position);
+    }
+    if (player.car.damage > 0.4 && Math.random() < dt * 6) {
       world.effects.smoke(player.car.mesh.position);
     }
     if (events.hitPed) {
@@ -159,16 +198,19 @@ export function updateWorld(world, dt, input) {
   }
 
   const driving = !player.onFoot;
-  world.audio.setEngine(driving ? Math.abs(player.car.speed) / TUNING.carMaxSpeed : 0, driving);
+  const speedNorm = driving
+    ? Math.abs(player.car.speed) / ((HANDLING[player.car.kind] ?? HANDLING.sedan).max)
+    : 0;
+  world.audio.setEngine(driving ? speedNorm : 0, driving);
   world.audio.setSiren(world.police.sirenOn, dt);
-  updateCamera(dt, world.cameraRig, playerPosition(player), driving, input.takeLook());
+  updateCamera(dt, world.cameraRig, playerPosition(player), driving, input.takeLook(), speedNorm);
   return null;
 }
 
 /** After a bust or a wipe-out: fine Mara, clear the heat, drop her off. */
 export function respawn(world, kind) {
   const player = world.player;
-  if (!player.onFoot) exitCar(player);
+  if (!player.onFoot) exitCar(player, world);
   clearWanted(world.police);
   player.health = TUNING.playerHealth;
   player.cash = Math.max(0, player.cash - (kind === 'busted' ? 100 : 150));
@@ -190,6 +232,7 @@ export function collectSave(world) {
     stashesTaken: world.missions.stashes.filter((s) => s.taken).map((s) => s.index),
     player: { x: Math.round(pos.x), z: Math.round(pos.z), heading: world.player.heading },
     storyDone: world.missions.storyDone,
-    version: 1,
+    stats: { ...world.stats },
+    version: 2,
   };
 }

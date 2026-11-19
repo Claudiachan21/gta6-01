@@ -1,10 +1,6 @@
-// Solmar Bay — boot and the one loop. The world advances in fixed 1/60 s
-// steps; the renderer paints every animation frame. Screens: title, play,
-// paused, busted, wasted.
-//
-// ?seed=N fixes the city. ?shot=cover|chase|mission|combat (with &seed=N)
-// stages that scene instead of running the game, paints it, and sets
-// window.__shotReady for a screenshot.
+// Solmar Bay — boot and the one loop (fixed 1/60 s steps; screens: title,
+// play, paused, busted, wasted). ?shot=cover|chase|mission|combat|garage
+// stages that scene; ?tod=<hours> pins the time of day; ?seed=N fixes the city.
 import * as THREE from 'three';
 import { KEYS } from './config.js';
 import { createInput } from './input.js';
@@ -20,6 +16,7 @@ const MAX_FRAME = 0.25;
 
 const params = new URLSearchParams(window.location.search);
 const shot = params.get('shot');
+const todParam = Number(params.get('tod'));
 const seedParam = Number.parseInt(params.get('seed') ?? '', 10);
 const seed = Number.isInteger(seedParam) ? seedParam : Math.floor(Math.random() * 4294967296);
 
@@ -33,6 +30,11 @@ renderer.shadowMap.type = THREE.PCFShadowMap;
 const input = createInput(canvas);
 let world = createWorld(seed, loadSave());
 let endKind = null;
+
+function applyTod() {
+  if (Number.isFinite(todParam)) world.daynight.tod = todParam;
+}
+applyTod();
 
 function saveGame() {
   if (world.screen === 'title') return;
@@ -58,6 +60,7 @@ function startGame(fresh) {
   world.hud.setScreen('play');
   world.audio.ensure();
   world.audio.startMusic();
+  applyTod();
   if (!saveData.storyDone) world.nextMissionAt = world.time + 2;
   else world.hud.toast('Free roam — the city is yours.');
 }
@@ -78,6 +81,13 @@ function resumeFromEnd() {
   saveGame();
 }
 
+/** Photo mode: hide the HUD, let the camera drift in a slow orbit. */
+function togglePhoto() {
+  world.photo = !world.photo;
+  world.hud.root.classList.toggle('photo', world.photo);
+  if (world.photo) world.hud.toast('Photo mode — F to exit, drag to look.');
+}
+
 function runShot(name) {
   const plan = stageShot(name, world);
   if (plan.override) input.override = plan.override;
@@ -87,7 +97,23 @@ function runShot(name) {
     // while software rendering keeps the frame count (and wall time) low.
     updateWorld(world, STEP, input);
     updateWorld(world, STEP, input);
-    if (plan.orbit) orbitCamera(STEP, world.cameraRig, { x: 0, z: 0 }, 95, 55, 0.06, world.time);
+    // A fixed vista (the cover): camera over the sea, looking west at the
+    // sunset skyline — lighthouse left, downtown right, water foreground.
+    if (plan.vista) {
+      world.camera.position.set(plan.vista.pos[0], plan.vista.pos[1], plan.vista.pos[2]);
+      world.camera.lookAt(plan.vista.look[0], plan.vista.look[1], plan.vista.look[2]);
+    } else if (plan.orbit) orbitCamera(STEP, world.cameraRig, { x: 0, z: 0 }, 130, 45, 0.06, world.time, 3 * Math.PI / 2);
+    // Stage one fallen rival mid-shot (a real game state, posed for the
+    // frame — the same as the staged roadblock cars in the chase shot).
+    if (plan.fallRivalAt === frame) {
+      const fallen = world.combat.rivals.find((r) => r.alive);
+      if (fallen) {
+        fallen.alive = false;
+        fallen.health = 0;
+        fallen.mesh.rotation.x = -Math.PI / 2;
+        fallen.mesh.position.y = 0.3;
+      }
+    }
     // Banners run on wall-clock time, so re-show the mission banner just
     // before the capture frame; otherwise it would have faded long ago.
     // (The chase shot skips it: the objective box already names the job.)
@@ -141,6 +167,11 @@ function runGame() {
 
   function handleKeys() {
     if (KEYS.pause.some((code) => input.wasPressed(code))) {
+      // Esc leaves photo mode before it pauses — one press, one layer.
+      if (world.photo) {
+        togglePhoto();
+        return;
+      }
       if (world.screen === 'play') {
         world.screen = 'pause';
         world.hud.setScreen('pause');
@@ -153,6 +184,13 @@ function runGame() {
     if (KEYS.mute.some((code) => input.wasPressed(code))) {
       world.audio.setMuted(!world.audio.isMuted());
     }
+    if (KEYS.radio.some((code) => input.wasPressed(code)) && world.screen === 'play') {
+      world.audio.nextTrack();
+      world.hud.toast(`♪ ${world.audio.trackName()}`);
+    }
+    if (KEYS.photo.some((code) => input.wasPressed(code)) && world.screen === 'play') {
+      togglePhoto();
+    }
     if (input.wasPressed('Enter') && world.screen === 'title') startGame(!loadSave());
   }
 
@@ -163,6 +201,7 @@ function runGame() {
     handleKeys();
     if (world.screen === 'title' || world.screen === 'play') {
       while (accumulator >= STEP && (world.screen === 'title' || world.screen === 'play')) {
+        if (world.photo) world.cameraRig.yaw += STEP * 0.08;
         const event = updateWorld(world, STEP, input);
         accumulator -= STEP;
         if (event === 'busted' || event === 'wasted') showEnd(event);

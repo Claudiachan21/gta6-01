@@ -18,6 +18,19 @@ function groundTexture(layout) {
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#cfc8b8';
   ctx.fillRect(0, 0, TEX, TEX);
+  for (const key of Object.keys(layout.reserved ?? {})) {
+    const [rx, rz] = key.split(',').map(Number);
+    const kind = layout.reserved[key];
+    ctx.fillStyle = kind === 'plaza' ? '#d9c9a0' : kind === 'market' ? '#c9a184' : kind === 'works' ? '#a89478' : kind === 'stadium' ? '#8fae7a' : '#b5ada0';
+    ctx.fillRect(toPx(rx - 16), toPx(rz - 16), 32 * SCALE, 32 * SCALE);
+    if (kind === 'plaza') {
+      ctx.strokeStyle = '#b8a67a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(toPx(rx), toPx(rz), 9 * SCALE, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
   for (const park of layout.parks) {
     ctx.fillStyle = '#7fae6a';
     ctx.fillRect(toPx(park.x - 16), toPx(park.z - 16), 32 * SCALE, 32 * SCALE);
@@ -47,6 +60,10 @@ function groundTexture(layout) {
   ctx.fillStyle = '#e8c832';
   for (const s of STREETS) {
     for (let v = -WORLD_HALF + 8; v < WORLD_HALF - 8; v += 11) {
+      // No dashes through an intersection: the crossing stays clean.
+      let crossing = false;
+      for (const c of STREETS) if (Math.abs(v - c) < 9) crossing = true;
+      if (crossing) continue;
       ctx.fillRect(toPx(v), toPx(s - 0.4), 5 * SCALE, 0.8 * SCALE);
       ctx.fillRect(toPx(s - 0.4), toPx(v), 0.8 * SCALE, 5 * SCALE);
     }
@@ -79,7 +96,13 @@ function billboardTexture(lines) {
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 256, 128);
   ctx.fillStyle = '#ffd94d';
-  ctx.font = 'bold 34px system-ui, sans-serif';
+  // Long names shrink to fit the board instead of clipping at the edges.
+  let size = 34;
+  ctx.font = `bold ${size}px system-ui, sans-serif`;
+  while (ctx.measureText(lines[0]).width > 240 && size > 16) {
+    size -= 2;
+    ctx.font = `bold ${size}px system-ui, sans-serif`;
+  }
   ctx.textAlign = 'center';
   ctx.fillText(lines[0], 128, 56);
   ctx.fillStyle = '#ffffff';
@@ -132,23 +155,29 @@ export function buildGround(scene, layout) {
   }
 
   const boards = [
-    { pos: [-66, 22], lines: ['SOLMAR BAY', 'sun · sea · speed'] },
-    { pos: [66, -66], lines: ['MARINA DR', 'harbor eats & fuel'] },
-    { pos: [22, 154], lines: ['SUNSET AUTO', 'we buy any car'] },
+    { pos: [-66, 22], face: Math.PI / 4, lines: ['SOLMAR BAY', 'sun · sea · speed'] },
+    { pos: [66, -66], face: Math.PI / 4, lines: ['MARINA DR', 'harbor eats & fuel'] },
+    { pos: [22, 154], face: Math.PI / 4, lines: ['SUNSET AUTO', 'we buy any car'] },
+    { pos: [-110, 176], face: -3 * Math.PI / 4, lines: ['SOLMAR STADIUM', 'home of the Sharks'] },
   ];
   for (const board of boards) {
-    const panel = new THREE.Mesh(
-      new THREE.PlaneGeometry(20, 10),
-      new THREE.MeshLambertMaterial({ map: billboardTexture(board.lines), side: THREE.DoubleSide }),
-    );
+    const texture = billboardTexture(board.lines);
+    const material = new THREE.MeshLambertMaterial({ map: texture });
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(20, 10), material);
     panel.position.set(board.pos[0], 12, board.pos[1]);
-    panel.rotation.y = Math.PI / 4;
+    panel.rotation.y = board.face;
+    // A second panel back to back, so the board reads correctly from both
+    // sides — a DoubleSide plane would mirror the text from behind.
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(20, 10), material);
+    back.position.set(board.pos[0] - Math.sin(board.face) * 0.08, 12, board.pos[1] - Math.cos(board.face) * 0.08);
+    back.rotation.y = board.face + Math.PI;
     const post = new THREE.Mesh(
       new THREE.BoxGeometry(1, 12, 1),
       new THREE.MeshLambertMaterial({ color: 0x555555 }),
     );
     post.position.set(board.pos[0], 6, board.pos[1]);
     group.add(panel);
+    group.add(back);
     group.add(post);
   }
   scene.add(group);
@@ -181,6 +210,8 @@ export function buildProps(scene, layout, rng) {
   poles.castShadow = true;
   group.add(poles);
   group.add(heads);
+  // The day/night system brightens every lamp head after dark.
+  group.userData.lampHeadMaterial = headMaterial;
 
   const trunkGeometry = new THREE.CylinderGeometry(0.22, 0.3, 5, 6);
   const crownGeometry = new THREE.IcosahedronGeometry(2.4, 0);

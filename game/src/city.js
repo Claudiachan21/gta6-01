@@ -3,6 +3,15 @@
 // same city for every player and every screenshot.
 import { BLOCK_CENTERS, COLORS, PITCH, ROAD_HALF, STREETS, WORLD_HALF } from './config.js';
 
+/** Blocks kept clear of random buildings: garage, stadium, plaza, market, worksite. */
+export const RESERVED_BLOCKS = {
+  '22,154': 'garage',
+  '-154,154': 'stadium',
+  '66,-66': 'plaza',
+  '-66,-154': 'market',
+  '154,66': 'works',
+};
+
 /** Is (x, z) on a road (inside any street band)? */
 export function isOnRoad(x, z) {
   for (const s of STREETS) {
@@ -74,8 +83,15 @@ export function createCityLayout(rng) {
   const parks = [];
   const lots = [];
   const colliders = [];
+  const reserved = {};
   for (const bx of BLOCK_CENTERS) {
     for (const bz of BLOCK_CENTERS) {
+      const kind = RESERVED_BLOCKS[`${bx},${bz}`];
+      if (kind) {
+        // Reserved ground stays open: the landmark or garage owns it.
+        reserved[`${bx},${bz}`] = kind;
+        continue;
+      }
       const downtown = Math.abs(bx) <= 66 && Math.abs(bz) <= 66;
       const roll = rng.next();
       if (roll < 0.1) {
@@ -122,6 +138,7 @@ export function createCityLayout(rng) {
     buildings,
     parks,
     lots,
+    reserved,
     colliders,
     worldHalf: WORLD_HALF,
   };

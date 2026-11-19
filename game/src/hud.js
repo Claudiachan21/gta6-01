@@ -1,12 +1,18 @@
-// The HUD and the menus: wanted stars, cash, health, speed, mission
-// objective, banners, toasts, the start screen, pause, busted and wasted.
+// The HUD and the menus: stars, cash, health, speed, objective, banners,
+// toasts, clock, timer, district toast, prompt, radio, stats, start/pause.
 import { TUNING } from './config.js';
 import { currentObjective } from './missions.js';
 import { playerPosition, playerSpeed } from './player.js';
+import { clockText } from './daynight.js';
 import { drawMinimap } from './minimap.js';
 
 function el(id) {
   return document.getElementById(id);
+}
+
+function formatTimer(seconds) {
+  const s = Math.max(0, Math.ceil(seconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 export function createHUD() {
@@ -32,8 +38,15 @@ export function createHUD() {
     busted: el('busted'),
     wasted: el('wasted'),
     minimap: el('minimap'),
+    clock: el('clock'),
+    timer: el('timer'),
+    district: el('district'),
+    prompt: el('prompt'),
+    radio: el('radio'),
+    stats: el('stats'),
     bannerUntil: 0,
     toastUntil: 0,
+    districtUntil: 0,
     toast(text) {
       hud.toastEl.textContent = text;
       hud.toastEl.classList.add('show');
@@ -44,6 +57,20 @@ export function createHUD() {
       hud.bannerSub.textContent = sub;
       hud.banner.classList.add('show');
       hud.bannerUntil = performance.now() + 4200;
+    },
+    /** The district toast: a big name flash when crossing into a new area. */
+    showDistrict(name) {
+      hud.district.textContent = name;
+      hud.district.classList.add('show');
+      hud.districtUntil = performance.now() + 2600;
+    },
+    /** The contextual prompt line (garage sell / bribe / repaint). */
+    showPrompt(text) {
+      if (hud.prompt.textContent !== text) hud.prompt.textContent = text;
+      hud.prompt.classList.add('show');
+    },
+    hidePrompt() {
+      hud.prompt.classList.remove('show');
     },
     /** Switch the visible screen: title, play, pause, busted, wasted. */
     setScreen(name) {
@@ -58,7 +85,7 @@ export function createHUD() {
       const btn = el('btn-continue');
       if (save) {
         btn.classList.remove('hidden');
-        info.textContent = `Saved game — $${save.cash} · ${save.storyDone ? 'story complete' : `mission ${save.missionIndex + 1} of 3`} · ${save.stashesTaken.length}/8 stashes`;
+        info.textContent = `Saved game — $${save.cash} · ${save.storyDone ? 'story complete' : `mission ${save.missionIndex + 1} of 6`} · ${save.stashesTaken.length}/12 stashes`;
       } else {
         btn.classList.add('hidden');
         info.textContent = 'No saved game yet.';
@@ -83,6 +110,7 @@ export function createHUD() {
       const now = performance.now();
       if (now > hud.bannerUntil) hud.banner.classList.remove('show');
       if (now > hud.toastUntil) hud.toastEl.classList.remove('show');
+      if (now > hud.districtUntil) hud.district.classList.remove('show');
       if (world.missions.banner) {
         hud.showBanner(world.missions.banner.title, world.missions.banner.sub);
         world.missions.banner = null;
@@ -120,9 +148,27 @@ export function createHUD() {
         hud.objectiveText.textContent = 'Your next job from Dax starts shortly — explore the city.';
         hud.objectiveDist.textContent = '';
       }
+      // Clock pill: time of day plus the day part (golden hour, night...).
+      hud.clock.textContent = `${clockText(world.daynight)} · ${world.daynight.daypart}`;
+      // Mission timer: top right, red and urgent under ten seconds.
+      const timer = world.missions.timer;
+      if (timer !== null && world.missions.active) {
+        hud.timer.textContent = formatTimer(timer);
+        hud.timer.classList.add('show');
+        hud.timer.classList.toggle('urgent', timer <= 10);
+      } else {
+        hud.timer.classList.remove('show');
+      }
+      hud.radio.textContent = `♪ ${world.audio.trackName()}`;
       hud.hint.textContent = driving
-        ? 'W/S drive · A/D steer · SPACE handbrake · E exit car · M mute · ESC pause'
-        : 'WASD move · SHIFT run · drag mouse to look · CLICK shoot · R reload · E enter car · ESC pause';
+        ? 'W/S drive · A/D steer · SPACE handbrake · E exit · G garage · T radio · F photo · ESC pause'
+        : 'WASD move · SHIFT run · mouse look · CLICK shoot · R reload · E car · G garage · T radio · F photo · ESC pause';
+      // Pause-screen stats: the run so far, in one line each.
+      if (!hud.pause.classList.contains('hidden')) {
+        const stats = world.stats;
+        const mins = Math.floor(stats.playTime / 60);
+        hud.stats.innerHTML = `Missions done <b>${stats.missionsDone} / 6</b> · Cars sold <b>${stats.carsSold}</b><br>Cash earned <b>$${stats.cashEarned}</b> · Time in the city <b>${mins} min</b> · Stashes <b>${world.missions.stashes.filter((s) => s.taken).length} / 12</b>`;
+      }
       drawMinimap(hud.minimap, world);
     },
   };

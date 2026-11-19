@@ -14,6 +14,12 @@ export function createAudio() {
   let musicTimer = null;
   let musicStep = 0;
   let muted = false;
+  let track = 0;
+  const TRACKS = [
+    { name: 'SOLMAR FM', tempo: 240, bass: [55, 0, 55, 65.4, 55, 0, 49, 58.3] },
+    { name: 'NEON NIGHTS', tempo: 200, bass: [65.4, 0, 65.4, 0, 77.8, 0, 65.4, 58.3] },
+    { name: 'COASTAL CRUISE', tempo: 300, bass: [49, 0, 0, 58.3, 0, 65.4, 0, 0] },
+  ];
 
   function ensure() {
     if (ctx) {
@@ -78,8 +84,6 @@ export function createAudio() {
     osc.stop(ctx.currentTime + seconds);
   }
 
-  const bassLine = [55, 0, 55, 65.4, 55, 0, 49, 58.3];
-
   return {
     /** Create/resume the context on a user gesture. */
     ensure,
@@ -140,12 +144,39 @@ export function createAudio() {
         setTimeout(() => blip(freq, 0.22, 'triangle', 0.25), i * 110);
       });
     },
+    /** Cash-register cha-ching for a garage sale. */
+    playChaChing() {
+      blip(1318, 0.09, 'triangle', 0.3);
+      setTimeout(() => blip(1760, 0.18, 'triangle', 0.3), 90);
+      setTimeout(() => blip(2093, 0.22, 'triangle', 0.22), 180);
+    },
+    /** Short warning beep for a mission timer running low. */
+    alarm() {
+      blip(880, 0.12, 'square', 0.14);
+      setTimeout(() => blip(880, 0.12, 'square', 0.14), 160);
+    },
+    /** The radio station now playing. */
+    trackName() {
+      return TRACKS[track].name;
+    },
+    /** Switch to the next station (T key); restarts the groove. */
+    nextTrack() {
+      track = (track + 1) % TRACKS.length;
+      musicStep = 0;
+      if (musicTimer) {
+        clearInterval(musicTimer);
+        musicTimer = null;
+        this.startMusic();
+      }
+      return TRACKS[track].name;
+    },
     /** Start the low-key bass-and-hats groove. */
     startMusic() {
       if (!ensure() || musicTimer) return;
+      const current = TRACKS[track];
       musicTimer = setInterval(() => {
         if (muted) return;
-        const note = bassLine[musicStep % bassLine.length];
+        const note = current.bass[musicStep % current.bass.length];
         musicStep += 1;
         if (note > 0) blip(note, 0.22, 'triangle', 0.16);
         if (musicStep % 2 === 0) {
@@ -157,7 +188,7 @@ export function createAudio() {
           gain.connect(master);
           source.start();
         }
-      }, 240);
+      }, current.tempo);
     },
     stopMusic() {
       if (musicTimer) {

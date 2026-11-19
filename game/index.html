@@ -21,14 +21,19 @@
       <div id="objective-dist"></div>
     </div>
   </div>
+  <div id="clock">10:00 · morning</div>
   <div id="stars">☆☆☆☆☆</div>
+  <div id="timer"></div>
+  <div id="district"></div>
   <div id="bottom-left">
     <canvas id="minimap" width="200" height="200"></canvas>
     <div id="health-wrap"><div id="health-bar"></div></div>
     <div id="ammo"></div>
+    <div id="radio">♪ SOLMAR FM</div>
   </div>
   <div id="speed"></div>
   <div id="hint"></div>
+  <div id="prompt"></div>
   <div id="crosshair">+</div>
   <div id="banner"><div id="banner-title"></div><div id="banner-sub"></div></div>
   <div id="toast"></div>
@@ -45,8 +50,8 @@
     <button id="btn-new" class="big" type="button">NEW GAME</button>
     <button id="btn-howto" class="big ghost" type="button">HOW TO PLAY</button>
     <div id="howto" class="hidden">
-      <p><b>WASD</b> move / drive · <b>Shift</b> run · <b>drag mouse</b> look · <b>Click</b> shoot · <b>R</b> reload · <b>E</b> enter / steal car · <b>Space</b> handbrake · <b>M</b> mute · <b>Esc</b> pause</p>
-      <p>Take missions from Dax, steal cars, lose the cops, collect cash stashes. Progress saves automatically.</p>
+      <p><b>WASD</b> move / drive · <b>Shift</b> run · <b>drag mouse</b> look · <b>Click</b> shoot · <b>R</b> reload · <b>E</b> enter / steal car · <b>Space</b> handbrake · <b>G</b> garage (sell / bribe) · <b>B</b> repaint · <b>T</b> radio · <b>F</b> photo mode · <b>M</b> mute · <b>Esc</b> pause</p>
+      <p>Take 6 missions from Dax, steal cars, sell them at Sunset Auto, lose the cops, collect 12 cash stashes. Progress saves automatically.</p>
     </div>
     <p class="foot">100% original: its city, characters, vehicles, story, art and sound are all our own — nothing from Rockstar Games or any other commercial game.</p>
   </div>
@@ -56,6 +61,7 @@
   <div class="panel">
     <h1>PAUSED</h1>
     <p class="tagline">Solmar Bay waits for no one. Well — except now.</p>
+    <p id="stats"></p>
     <button id="btn-resume" class="big" type="button">RESUME</button>
     <button id="btn-restart" class="big ghost" type="button">RESTART (NEW GAME)</button>
     <button id="btn-quit" class="big ghost" type="button">SAVE &amp; QUIT TO MENU</button>

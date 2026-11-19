@@ -1,5 +1,5 @@
-// Pedestrians: simple low-poly walkers on the sidewalks. They stroll along
-// the kerb, turn at corners, and flee from gunfire or a speeding car.
+// Pedestrians: low-poly walkers on the sidewalks; they stroll, turn at
+// corners, chat in pairs, and flee from gunfire or a speeding car.
 import * as THREE from 'three';
 import { STREETS, TUNING, WORLD_HALF } from './config.js';
 import { nearestStreet, randomRoadPoint } from './city.js';
@@ -45,6 +45,57 @@ export function createPedestrians(scene, rng, count) {
       phase: rng.range(0, Math.PI * 2),
       flee: 0,
       down: false,
+      chatting: false,
+      // Day-only walkers go home after dark; a few only stroll at sunset.
+      dayOnly: rng.chance(0.4),
+      sunset: false,
+    });
+  }
+  // Chatting pairs: two locals facing each other on a corner, mid-gossip.
+  const pairSpots = [
+    { x: -36, z: -36, face: Math.PI / 2 },
+    { x: 52, z: 52, face: 0 },
+    { x: -100, z: 140, face: -Math.PI / 2 },
+    { x: 140, z: -100, face: Math.PI },
+  ];
+  for (const spot of pairSpots) {
+    for (const [dx, dz, face] of [[0, 0, spot.face], [1.1, 0.4, spot.face + Math.PI]]) {
+      const { group, legL, legR } = makePedMesh(rng);
+      group.position.set(spot.x + dx, 0, spot.z + dz);
+      group.rotation.y = face;
+      scene.add(group);
+      peds.push({
+        mesh: group,
+        legL,
+        legR,
+        heading: face,
+        speed: 0,
+        phase: rng.range(0, Math.PI * 2),
+        flee: 0,
+        down: false,
+        chatting: true,
+        dayOnly: false,
+        sunset: false,
+      });
+    }
+  }
+  // Sunset strollers on the beachfront, out only in the golden hour.
+  for (let i = 0; i < 4; i += 1) {
+    const { group, legL, legR } = makePedMesh(rng);
+    group.position.set(190, 0, -60 + i * 40);
+    scene.add(group);
+    peds.push({
+      mesh: group,
+      legL,
+      legR,
+      heading: rng.pick([0, Math.PI]),
+      speed: rng.range(1.1, 1.6),
+      phase: rng.range(0, Math.PI * 2),
+      flee: 0,
+      down: false,
+      chatting: false,
+      dayOnly: false,
+      sunset: true,
     });
   }
   return peds;
@@ -64,9 +115,29 @@ export function scatterPeds(x, z, radius, peds) {
 }
 
 /** Walk the sidewalks; fleeing peds sprint away, then slow back to a stroll. */
-export function updatePeds(dt, peds, rng) {
+export function updatePeds(dt, peds, rng, daynight) {
+  const night = daynight ? daynight.nightFactor : 0;
+  const golden = daynight ? daynight.daypart === 'golden hour' : false;
   for (const ped of peds) {
     if (ped.down) continue;
+    // Day/night schedule: day walkers vanish after dark, sunset strollers
+    // only come out for the golden hour.
+    if (ped.dayOnly && night > 0.7) {
+      ped.mesh.visible = false;
+      continue;
+    }
+    if (ped.sunset && !golden) {
+      ped.mesh.visible = false;
+      continue;
+    }
+    ped.mesh.visible = true;
+    // Chatting pairs stay put, bobbing along to their own conversation.
+    if (ped.chatting && ped.flee <= 0) {
+      ped.phase += dt * 2;
+      ped.mesh.position.y = Math.abs(Math.sin(ped.phase)) * 0.06;
+      ped.mesh.rotation.y = ped.heading + Math.sin(ped.phase * 0.5) * 0.12;
+      continue;
+    }
     if (ped.flee > 0) {
       ped.flee -= dt;
       if (ped.flee <= 0) ped.heading = Math.round(ped.heading / (Math.PI / 2)) * (Math.PI / 2);
@@ -87,6 +158,11 @@ export function updatePeds(dt, peds, rng) {
       ped.heading += Math.PI;
     }
     ped.mesh.rotation.y = ped.heading;
+    // Beach strollers stay on the sand instead of drifting to the kerb.
+    if (ped.sunset) {
+      pos.x += (192 - pos.x) * Math.min(1, dt * 0.5);
+      continue;
+    }
     // Keep walkers near the kerb line of their street.
     const sx = nearestStreet(pos.x);
     const sz = nearestStreet(pos.z);
