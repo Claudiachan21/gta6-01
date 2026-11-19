@@ -22,5 +22,13 @@ export function createRandom(seed) {
     chance(p) {
       return this.next() < p;
     },
+    /** Shuffle a list in place (Fisher-Yates) and return it. */
+    shuffle(list) {
+      for (let i = list.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(this.next() * (i + 1));
+        [list[i], list[j]] = [list[j], list[i]];
+      }
+      return list;
+    },
   };
 }

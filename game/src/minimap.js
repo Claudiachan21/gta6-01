@@ -1,6 +1,7 @@
 // The circular minimap: streets, blocks, the sea, Mara's arrow, police,
-// the mission marker and cash stashes, drawn on a 2D canvas each frame.
-import { STREETS, WORLD_HALF } from './config.js';
+// the mission marker, cash stashes and the Sunset Auto garage, drawn on a
+// 2D canvas each frame.
+import { GARAGE, STREETS, WORLD_HALF } from './config.js';
 import { currentObjective } from './missions.js';
 import { playerPosition } from './player.js';
 
@@ -33,6 +34,14 @@ export function drawMinimap(canvas, world) {
     ctx.arc(toMap(stash.x, size), toMap(stash.z, size), 3, 0, Math.PI * 2);
     ctx.fill();
   }
+  // Sunset Auto: a green wrench-square so the player can always find the
+  // garage that buys their stolen cars.
+  ctx.fillStyle = '#7dffb0';
+  ctx.fillRect(toMap(GARAGE.x, size) - 3.5, toMap(GARAGE.z, size) - 3.5, 7, 7);
+  ctx.fillStyle = '#10151c';
+  ctx.font = 'bold 8px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('$', toMap(GARAGE.x, size), toMap(GARAGE.z, size) + 3);
   const objective = currentObjective(world.missions);
   if (objective && objective.x !== null) {
     const pulse = 5 + Math.sin(world.time * 5) * 2;

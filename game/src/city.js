@@ -1,7 +1,19 @@
 // Solmar Bay's layout: a street grid, city blocks, building footprints and
 // collision. Everything derives from the seed, so the same seed builds the
-// same city for every player and every screenshot.
-import { BLOCK_CENTERS, COLORS, PITCH, ROAD_HALF, STREETS, WORLD_HALF } from './config.js';
+// same city for every player and every screenshot. Three blocks are
+// reserved for landmarks (stadium, harbor, marina plaza) and hold no
+// buildings; nine named districts tile the map for the HUD.
+import { BLOCK_CENTERS, COLORS, DISTRICTS, PITCH, ROAD_HALF, STREETS, WORLD_HALF } from './config.js';
+
+// Blocks kept clear of buildings so landmarks can stand there. The garage
+// block is reserved too: mission 2 delivers a car to Sunset Auto, and a
+// random building on that spot would soft-lock the job.
+export const LANDMARK_BLOCKS = {
+  '-154,154': 'stadium',
+  '154,-154': 'harbor',
+  '154,154': 'plaza',
+  '22,154': 'garage',
+};
 
 /** Is (x, z) on a road (inside any street band)? */
 export function isOnRoad(x, z) {
@@ -16,6 +28,14 @@ export function nearestStreet(value) {
   let best = STREETS[0];
   for (const s of STREETS) if (Math.abs(s - value) < Math.abs(best - value)) best = s;
   return best;
+}
+
+/** The district name for a position (DOWNTOWN, HARBOR, MARINA, ...). */
+export function districtAt(x, z) {
+  for (const d of DISTRICTS) {
+    if (x >= d.x0 && x < d.x1 && z >= d.z0 && z < d.z1) return d.name;
+  }
+  return 'SOLMAR BAY';
 }
 
 /** Push a circle (pos, radius) out of every building collider and the world edge. */
@@ -58,24 +78,32 @@ function buildingAt(rng, x, z, w, d, downtown) {
     w,
     d,
     h: tall,
-    tex: rng.int(0, 2),
+    tex: rng.int(0, 3),
     tint: rng.pick(downtown ? COLORS.downtownTints : COLORS.buildingTints),
     roof: rng.chance(0.6),
+    tower: rng.chance(0.25),
+    neon: downtown && rng.chance(0.35),
   };
 }
 
 /**
  * Build the city layout: 64 blocks; downtown blocks near the centre grow
- * tall towers, some blocks become parks or parking lots, the rest hold
- * one, two or four buildings each.
+ * tall towers, some blocks become parks or parking lots, landmark blocks
+ * stay clear, the rest hold one, two or four buildings each.
  */
 export function createCityLayout(rng) {
   const buildings = [];
   const parks = [];
   const lots = [];
   const colliders = [];
+  const landmarkBlocks = [];
   for (const bx of BLOCK_CENTERS) {
     for (const bz of BLOCK_CENTERS) {
+      const landmark = LANDMARK_BLOCKS[`${bx},${bz}`];
+      if (landmark) {
+        landmarkBlocks.push({ x: bx, z: bz, kind: landmark });
+        continue;
+      }
       const downtown = Math.abs(bx) <= 66 && Math.abs(bz) <= 66;
       const roll = rng.next();
       if (roll < 0.1) {
@@ -122,6 +150,7 @@ export function createCityLayout(rng) {
     buildings,
     parks,
     lots,
+    landmarkBlocks,
     colliders,
     worldHalf: WORLD_HALF,
   };

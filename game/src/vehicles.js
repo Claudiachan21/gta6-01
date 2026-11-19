@@ -1,8 +1,9 @@
-// Cars: low-poly box-built meshes (sedan, sport, van, taxi, police) and the
-// traffic system — cars drive their lanes, turn at intersections and brake
-// for the car ahead.
+// Cars: low-poly box-built meshes (sedan, sport, van, taxi, police, pickup,
+// muscle) and the traffic system — cars drive their lanes, turn at
+// intersections and brake for the car ahead. Each kind handles differently:
+// the muscle car is fast and tail-happy, the pickup is slow but steady.
 import * as THREE from 'three';
-import { COLORS, STREETS, TUNING, WORLD_HALF } from './config.js';
+import { COLORS, STREETS, TUNING, VEHICLE_HANDLING, WORLD_HALF } from './config.js';
 import { nearestStreet, randomRoadPoint } from './city.js';
 
 const WHEEL_GEOMETRY = new THREE.CylinderGeometry(0.38, 0.38, 0.3, 10);
@@ -20,18 +21,40 @@ function box(w, h, d, material, x, y, z) {
 export function createCarMesh(kind, color) {
   const group = new THREE.Group();
   const paint = new THREE.MeshLambertMaterial({ color });
-  const long = kind === 'van' ? 5.0 : kind === 'sport' ? 4.0 : 4.3;
-  const wide = kind === 'van' ? 2.1 : 1.9;
+  const long = kind === 'van' ? 5.0 : kind === 'sport' || kind === 'muscle' ? 4.0 : kind === 'pickup' ? 4.8 : 4.3;
+  const wide = kind === 'van' || kind === 'pickup' ? 2.1 : 1.9;
   group.add(box(wide, 0.62, long, paint, 0, 0.62, 0));
   if (kind === 'van') {
     group.add(box(wide - 0.1, 0.85, long - 1.2, paint, 0, 1.3, 0));
     group.add(box(wide - 0.3, 0.6, 0.2, GLASS_MATERIAL, 0, 1.25, long / 2 - 0.5));
+    // Courier livery: a white stripe down each flank, a white roof,
+    // and a white rear door — the van is usually seen from behind, so
+    // the rear has to carry the livery too.
+    const stripeMat = new THREE.MeshLambertMaterial({ color: 0xf2f2f2 });
+    group.add(box(0.06, 0.3, long - 1.4, stripeMat, -wide / 2, 1.3, 0));
+    group.add(box(0.06, 0.3, long - 1.4, stripeMat, wide / 2, 1.3, 0));
+    group.add(box(wide - 0.2, 0.06, long - 1.3, stripeMat, 0, 1.75, 0));
+    group.add(box(wide - 0.3, 0.8, 0.06, stripeMat, 0, 1.3, -long / 2 - 0.01));
+  } else if (kind === 'pickup') {
+    // Cab up front, open bed at the back with side walls.
+    group.add(box(wide - 0.3, 0.6, long * 0.3, GLASS_MATERIAL, 0, 1.2, long * 0.18));
+    group.add(box(wide - 0.25, 0.12, long * 0.28, paint, 0, 1.52, long * 0.18));
+    group.add(box(0.12, 0.5, long * 0.42, paint, -wide / 2 + 0.06, 1.15, -long * 0.22));
+    group.add(box(0.12, 0.5, long * 0.42, paint, wide / 2 - 0.06, 1.15, -long * 0.22));
+    group.add(box(wide, 0.5, 0.12, paint, 0, 1.15, -long / 2 + 0.06));
   } else {
     group.add(box(wide - 0.3, 0.55, long * 0.45, GLASS_MATERIAL, 0, 1.18, -long * 0.05));
     group.add(box(wide - 0.25, 0.12, long * 0.42, paint, 0, 1.48, -long * 0.05));
   }
   if (kind === 'sport') {
     group.add(box(wide + 0.1, 0.1, 0.5, paint, 0, 1.05, -long / 2 + 0.1));
+  }
+  if (kind === 'muscle') {
+    // Hood scoop and twin racing stripes down the middle.
+    group.add(box(0.7, 0.18, 0.9, paint, 0, 1.0, long * 0.22));
+    const stripe = new THREE.MeshLambertMaterial({ color: 0x141414 });
+    group.add(box(0.34, 0.03, long * 0.9, stripe, -0.28, 0.95, 0));
+    group.add(box(0.34, 0.03, long * 0.9, stripe, 0.28, 0.95, 0));
   }
   if (kind === 'taxi') {
     group.add(box(0.9, 0.28, 0.5, new THREE.MeshLambertMaterial({ color: 0xffd94d, emissive: 0x554400 }), 0, 1.68, 0));
@@ -88,13 +111,16 @@ function makeCar(scene, kind, color, x, z, heading) {
     dir: 1,
     flash: 0,
     damage: 0,
+    roadblock: false,
+    converted: false,
+    handling: VEHICLE_HANDLING[kind] ?? VEHICLE_HANDLING.sedan,
   };
 }
 
 /** Spawn flowing traffic on the avenues. */
 export function createTraffic(scene, layout, rng, count) {
   const cars = [];
-  const kinds = ['sedan', 'sedan', 'sedan', 'sport', 'van', 'taxi'];
+  const kinds = ['sedan', 'sedan', 'sedan', 'sport', 'van', 'taxi', 'pickup', 'muscle'];
   for (let i = 0; i < count; i += 1) {
     const axis = rng.chance(0.5) ? 'x' : 'z';
     const point = randomRoadPoint(rng, axis);
@@ -125,7 +151,7 @@ export function createParkedCars(scene, layout, rng, count) {
     const street = rng.pick(STREETS);
     const along = rng.range(-170, 170);
     const side = rng.pick([-4.6, 4.6]);
-    const kind = rng.pick(['sedan', 'sedan', 'sport', 'van']);
+    const kind = rng.pick(['sedan', 'sedan', 'sport', 'van', 'pickup', 'muscle']);
     const car = makeCar(
       scene,
       kind,

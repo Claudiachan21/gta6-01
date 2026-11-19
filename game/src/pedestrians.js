@@ -1,5 +1,7 @@
 // Pedestrians: simple low-poly walkers on the sidewalks. They stroll along
-// the kerb, turn at corners, and flee from gunfire or a speeding car.
+// the kerb, turn at corners, and flee from gunfire or a speeding car. A
+// few stand in chatting pairs on the corners, facing each other — the
+// city feels lived in instead of just walked through.
 import * as THREE from 'three';
 import { STREETS, TUNING, WORLD_HALF } from './config.js';
 import { nearestStreet, randomRoadPoint } from './city.js';
@@ -28,24 +30,38 @@ function makePedMesh(rng) {
   return { group, legL, legR };
 }
 
-/** Spawn sidewalk walkers. */
+function makePed(scene, rng, x, z, heading, chatting) {
+  const { group, legL, legR } = makePedMesh(rng);
+  group.position.set(x, 0, z);
+  group.rotation.y = heading;
+  scene.add(group);
+  return {
+    mesh: group,
+    legL,
+    legR,
+    heading,
+    speed: rng.range(TUNING.pedSpeed * 0.7, TUNING.pedSpeed * 1.3),
+    phase: rng.range(0, Math.PI * 2),
+    flee: 0,
+    down: false,
+    chatting,
+  };
+}
+
+/** Spawn sidewalk walkers, plus three chatting pairs on the corners. */
 export function createPedestrians(scene, rng, count) {
   const peds = [];
-  for (let i = 0; i < count; i += 1) {
+  for (let i = 0; i < 3; i += 1) {
     const point = randomRoadPoint(rng);
-    const { group, legL, legR } = makePedMesh(rng);
-    group.position.set(point.x, 0, point.z);
-    scene.add(group);
-    peds.push({
-      mesh: group,
-      legL,
-      legR,
-      heading: rng.pick([0, Math.PI / 2, Math.PI, -Math.PI / 2]),
-      speed: rng.range(TUNING.pedSpeed * 0.7, TUNING.pedSpeed * 1.3),
-      phase: rng.range(0, Math.PI * 2),
-      flee: 0,
-      down: false,
-    });
+    const face = rng.pick([0, Math.PI / 2, Math.PI, -Math.PI / 2]);
+    const dx = Math.sin(face) * 1.4;
+    const dz = Math.cos(face) * 1.4;
+    peds.push(makePed(scene, rng, point.x, point.z, face, true));
+    peds.push(makePed(scene, rng, point.x + dx, point.z + dz, face + Math.PI, true));
+  }
+  for (let i = peds.length; i < count; i += 1) {
+    const point = randomRoadPoint(rng);
+    peds.push(makePed(scene, rng, point.x, point.z, rng.pick([0, Math.PI / 2, Math.PI, -Math.PI / 2]), false));
   }
   return peds;
 }
@@ -58,6 +74,7 @@ export function scatterPeds(x, z, radius, peds) {
     const dz = ped.mesh.position.z - z;
     if (dx * dx + dz * dz < radius * radius) {
       ped.flee = 4;
+      ped.chatting = false;
       ped.heading = Math.atan2(dx, dz);
     }
   }
@@ -70,6 +87,15 @@ export function updatePeds(dt, peds, rng) {
     if (ped.flee > 0) {
       ped.flee -= dt;
       if (ped.flee <= 0) ped.heading = Math.round(ped.heading / (Math.PI / 2)) * (Math.PI / 2);
+    }
+    // Chatting peds stay put, shifting their weight and turning their
+    // heads; a scare breaks the conversation for good.
+    if (ped.chatting && ped.flee <= 0) {
+      ped.phase += dt * 1.4;
+      ped.mesh.rotation.y = ped.heading + Math.sin(ped.phase) * 0.25;
+      ped.legL.rotation.x = Math.sin(ped.phase) * 0.06;
+      ped.legR.rotation.x = -Math.sin(ped.phase) * 0.06;
+      continue;
     }
     const speed = ped.flee > 0 ? 7 : ped.speed;
     const pos = ped.mesh.position;

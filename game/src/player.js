@@ -106,7 +106,7 @@ export function tryEnterCar(player, world) {
 }
 
 /** Step out of the car beside it; the car stays parked where it stops. */
-export function exitCar(player) {
+export function exitCar(player, world) {
   const car = player.car;
   if (!car) return;
   car.state = 'parked';

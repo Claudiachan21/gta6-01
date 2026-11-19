@@ -1,5 +1,7 @@
 // Particles: one THREE.Points pool for sparks, smoke puffs and pickup
-// sparkles. Particles fly, fade and fall back into the pool.
+// sparkles. Particles fly, fade and fall back into the pool. Crashes throw
+// orange sparks, handbrake slides puff grey smoke, and a battered car
+// trails dark smoke until it is sold or swapped.
 import * as THREE from 'three';
 
 const MAX = 400;
@@ -26,53 +28,50 @@ export function createEffects(scene) {
     positions[i * 3 + 1] = -50;
   }
   let cursor = 0;
-  return {
-    /** A burst of coloured sparks at `pos`. */
-    burst(pos, color, count, speed) {
-      const c = new THREE.Color(color);
-      for (let n = 0; n < count; n += 1) {
-        const p = parts[cursor];
-        const i = cursor;
-        cursor = (cursor + 1) % MAX;
-        p.alive = true;
-        p.maxLife = 0.4 + Math.random() * 0.5;
-        p.life = p.maxLife;
-        p.gravity = 6;
-        const a = Math.random() * Math.PI * 2;
-        const up = Math.random() * 0.9 + 0.3;
-        p.vx = Math.cos(a) * speed;
-        p.vy = up * speed;
-        p.vz = Math.sin(a) * speed;
-        positions[i * 3] = pos.x;
-        positions[i * 3 + 1] = pos.y;
-        positions[i * 3 + 2] = pos.z;
-        colors[i * 3] = c.r;
-        colors[i * 3 + 1] = c.g;
-        colors[i * 3 + 2] = c.b;
-      }
-      geometry.attributes.position.needsUpdate = true;
-      geometry.attributes.color.needsUpdate = true;
-    },
-    /** A grey smoke puff (handbrake slides, crash damage). */
-    smoke(pos) {
+
+  function spawn(pos, color, count, speed, gravity, life) {
+    const c = new THREE.Color(color);
+    for (let n = 0; n < count; n += 1) {
       const p = parts[cursor];
       const i = cursor;
       cursor = (cursor + 1) % MAX;
       p.alive = true;
-      p.maxLife = 0.9;
-      p.life = 0.9;
-      p.gravity = -1.5;
-      p.vx = (Math.random() - 0.5) * 1.5;
-      p.vy = 1.5 + Math.random();
-      p.vz = (Math.random() - 0.5) * 1.5;
+      p.maxLife = life * (0.7 + Math.random() * 0.6);
+      p.life = p.maxLife;
+      p.gravity = gravity;
+      const a = Math.random() * Math.PI * 2;
+      const up = Math.random() * 0.9 + 0.3;
+      p.vx = Math.cos(a) * speed;
+      p.vy = up * speed;
+      p.vz = Math.sin(a) * speed;
       positions[i * 3] = pos.x;
-      positions[i * 3 + 1] = pos.y + 0.4;
+      positions[i * 3 + 1] = pos.y;
       positions[i * 3 + 2] = pos.z;
-      colors[i * 3] = 0.55;
-      colors[i * 3 + 1] = 0.55;
-      colors[i * 3 + 2] = 0.55;
-      geometry.attributes.position.needsUpdate = true;
-      geometry.attributes.color.needsUpdate = true;
+      colors[i * 3] = c.r;
+      colors[i * 3 + 1] = c.g;
+      colors[i * 3 + 2] = c.b;
+    }
+    geometry.attributes.position.needsUpdate = true;
+    geometry.attributes.color.needsUpdate = true;
+  }
+
+  return {
+    /** A burst of coloured sparks at `pos`. */
+    burst(pos, color, count, speed) {
+      spawn(pos, color, count, speed, 6, 0.65);
+    },
+    /** Orange crash sparks that fly low and fast. */
+    sparks(pos) {
+      spawn(pos, 0xffa028, 18, 8, 9, 0.5);
+      spawn(pos, 0xffe9a8, 6, 5, 6, 0.35);
+    },
+    /** A grey smoke puff (handbrake slides, crash damage). */
+    smoke(pos) {
+      spawn(new THREE.Vector3(pos.x, pos.y + 0.4, pos.z), 0x8a8a8a, 1, 1.2, -1.5, 0.9);
+    },
+    /** Dark smoke from a battered engine, rising and lingering. */
+    damageSmoke(pos) {
+      spawn(new THREE.Vector3(pos.x, pos.y + 1, pos.z), 0x2a2a2a, 2, 0.8, -2.2, 1.4);
     },
     update(dt) {
       let changed = false;

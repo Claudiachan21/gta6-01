@@ -1,6 +1,8 @@
 // Arcade car physics, shared by the player's car and police cruisers:
 // throttle and steering, grip that bleeds sideways slide, the handbrake,
-// and collisions with buildings, other cars and pedestrians.
+// and collisions with buildings, other cars and pedestrians. Each car
+// drives on its kind's handling table (see VEHICLE_HANDLING), and every
+// hard hit adds damage — a battered car trails smoke.
 import * as THREE from 'three';
 import { TUNING } from './config.js';
 import { collideCircle } from './city.js';
@@ -23,7 +25,10 @@ function collideWithCars(car, cars, events) {
       pos.z -= nz * push;
       other.mesh.position.x += nx * push;
       other.mesh.position.z += nz * push;
-      if (Math.abs(car.speed) > 6) events.crashed = true;
+      if (Math.abs(car.speed) > 6) {
+        events.crashed = true;
+        car.damage += 1;
+      }
       car.speed *= 0.55;
       if (other.state === 'traffic') other.speed *= 0.4;
     }
@@ -48,10 +53,11 @@ function collideWithPeds(car, peds, events) {
 /** Advance one car a step under `axes` { throttle, steer, handbrake }. */
 export function driveCar(dt, car, axes, world) {
   const events = { crashed: false, hitPed: false };
-  const maxSpeed = car.state === 'police' ? TUNING.copMaxSpeed : TUNING.carMaxSpeed;
-  if (axes.throttle > 0) car.speed += TUNING.carAccel * dt;
+  const handling = car.handling ?? { accel: TUNING.carAccel, maxSpeed: TUNING.carMaxSpeed, turn: TUNING.carTurn };
+  const maxSpeed = car.state === 'police' ? TUNING.copMaxSpeed : handling.maxSpeed;
+  if (axes.throttle > 0) car.speed += handling.accel * dt;
   else if (axes.throttle < 0) {
-    car.speed += car.speed > 0.5 ? -TUNING.carBrake * dt : -TUNING.carAccel * 0.5 * dt;
+    car.speed += car.speed > 0.5 ? -TUNING.carBrake * dt : -handling.accel * 0.5 * dt;
   } else {
     car.speed -= car.speed * Math.min(1, dt * 0.6);
   }
@@ -59,7 +65,7 @@ export function driveCar(dt, car, axes, world) {
   car.speed = Math.max(-TUNING.carMaxReverse, Math.min(maxSpeed, car.speed));
   const speedFactor = Math.min(1, Math.abs(car.speed) / 8);
   const grip = axes.handbrake ? 0.35 : 1;
-  car.heading += axes.steer * TUNING.carTurn * speedFactor * grip * dt * (car.speed >= 0 ? 1 : -1);
+  car.heading += axes.steer * handling.turn * speedFactor * grip * dt * (car.speed >= 0 ? 1 : -1);
   const pos = car.mesh.position;
   const wantX = pos.x + Math.sin(car.heading) * car.speed * dt;
   const wantZ = pos.z + Math.cos(car.heading) * car.speed * dt;
@@ -68,6 +74,7 @@ export function driveCar(dt, car, axes, world) {
   collideCircle(pos, TUNING.carRadius, world.layout);
   if ((pos.x !== wantX || pos.z !== wantZ) && Math.abs(car.speed) > 5) {
     events.crashed = true;
+    car.damage += 1;
     car.speed *= 0.45;
   }
   collideWithCars(car, world.allCars, events);

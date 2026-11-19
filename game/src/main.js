@@ -4,7 +4,8 @@
 //
 // ?seed=N fixes the city. ?shot=cover|chase|mission|combat (with &seed=N)
 // stages that scene instead of running the game, paints it, and sets
-// window.__shotReady for a screenshot.
+// window.__shotReady for a screenshot. &tod=H pins the time of day
+// (0–24) for the shot — golden hour and night look very different.
 import * as THREE from 'three';
 import { KEYS } from './config.js';
 import { createInput } from './input.js';
@@ -14,6 +15,7 @@ import { firePistol } from './combat.js';
 import { MISSIONS } from './missions.js';
 import { orbitCamera } from './camera.js';
 import { stageShot } from './shots.js';
+import { setTimeOfDay } from './daynight.js';
 
 const STEP = 1 / 60;
 const MAX_FRAME = 0.25;
@@ -22,6 +24,8 @@ const params = new URLSearchParams(window.location.search);
 const shot = params.get('shot');
 const seedParam = Number.parseInt(params.get('seed') ?? '', 10);
 const seed = Number.isInteger(seedParam) ? seedParam : Math.floor(Math.random() * 4294967296);
+const todParam = Number.parseFloat(params.get('tod') ?? '');
+const tod = Number.isFinite(todParam) ? todParam : null;
 
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -79,6 +83,7 @@ function resumeFromEnd() {
 }
 
 function runShot(name) {
+  if (tod !== null) setTimeOfDay(world.daynight, tod);
   const plan = stageShot(name, world);
   if (plan.override) input.override = plan.override;
   let frame = 0;
@@ -87,7 +92,17 @@ function runShot(name) {
     // while software rendering keeps the frame count (and wall time) low.
     updateWorld(world, STEP, input);
     updateWorld(world, STEP, input);
-    if (plan.orbit) orbitCamera(STEP, world.cameraRig, { x: 0, z: 0 }, 95, 55, 0.06, world.time);
+    if (plan.orbit) {
+      orbitCamera(
+        STEP,
+        world.cameraRig,
+        plan.orbitCentre ?? { x: 0, z: 0 },
+        plan.orbitRadius ?? 95,
+        plan.orbitHeight ?? 55,
+        0.06,
+        world.time + (plan.orbitOffset ?? 0),
+      );
+    }
     // Banners run on wall-clock time, so re-show the mission banner just
     // before the capture frame; otherwise it would have faded long ago.
     // (The chase shot skips it: the objective box already names the job.)
@@ -97,6 +112,7 @@ function runShot(name) {
     }
     world.hud.update(world);
     renderer.render(world.scene, world.camera);
+    input.endFrame();
     frame += 1;
     if (frame < plan.frames) {
       requestAnimationFrame(tick);

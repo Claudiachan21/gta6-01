@@ -1,6 +1,8 @@
-// Story and missions: three jobs for Mara Solis in Solmar Bay, each a
-// chain of objectives with a beacon marker, plus cash stashes hidden
-// around the city as a free-roam activity.
+// Story and missions: five jobs for Mara Solis in Solmar Bay, each a
+// chain of objectives with a beacon marker — a delivery, a car theft, a
+// harbor clear-out, a timed run against the clock, and a five-star getaway
+// finale — plus twelve cash stashes hidden around the city as a free-roam
+// activity.
 import * as THREE from 'three';
 import { addWanted, clearWanted } from './police.js';
 import { spawnCar } from './vehicles.js';
@@ -40,9 +42,32 @@ export const MISSIONS = [
       { text: 'Escape to the safe house', type: 'goto', x: -132, z: -132 },
     ],
   },
+  {
+    id: 'midnight-run',
+    title: 'MISSION 4 — SUNSET RUN',
+    briefing: 'A courier run with a hard deadline: grab the case at the plaza and reach the stadium before the clock runs out.',
+    reward: 400,
+    steps: [
+      { text: 'Pick up the case at Marina Plaza', type: 'goto', x: 154, z: 154 },
+      // The finish is the stadium's east gate, not the bowl centre: the
+      // beacon stands outside the wall where the driver can actually see
+      // it (inside the bowl it was hidden behind the wall from the road).
+      { text: 'Reach the stadium before time runs out', type: 'timed', x: -138, z: 154, seconds: 80 },
+    ],
+  },
+  {
+    id: 'the-getaway',
+    title: 'MISSION 5 — THE GETAWAY',
+    briefing: 'The job went loud. Five stars, the whole city after you — survive the chase, then vanish to the safe house.',
+    reward: 800,
+    steps: [
+      { text: 'Survive the five-star chase', type: 'survive', seconds: 90 },
+      { text: 'Escape to the safe house', type: 'goto', x: -132, z: -132 },
+    ],
+  },
 ];
 
-const RIVAL_SPOTS = [
+export const RIVAL_SPOTS = [
   { x: 170, z: -124 },
   { x: 182, z: -140 },
   { x: 170, z: -144 },
@@ -58,13 +83,17 @@ const STASH_SPOTS = [
   { x: 84, z: -84 },
   { x: -84, z: 84 },
   { x: 84, z: 84 },
+  { x: 0, z: -168 },
+  { x: 0, z: 168 },
+  { x: -168, z: 0 },
+  { x: 168, z: 0 },
 ];
 
 function makeBeacon() {
   const group = new THREE.Group();
   const beam = new THREE.Mesh(
     new THREE.CylinderGeometry(1.6, 1.6, 40, 12, 1, true),
-    new THREE.MeshBasicMaterial({ color: 0xffd94d, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ color: 0xffd94d, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false }),
   );
   beam.position.y = 20;
   const ring = new THREE.Mesh(
@@ -95,7 +124,7 @@ function makeStashMesh() {
   return group;
 }
 
-/** Mission state: beacon marker, stashes and the active job. */
+/** Mission state: beacon marker, stashes, the active job and its timer. */
 export function createMissions(scene, save) {
   const beacon = makeBeacon();
   scene.add(beacon);
@@ -115,6 +144,9 @@ export function createMissions(scene, save) {
     stashes,
     targetCar: null,
     banner: null,
+    timer: 0,
+    timerTotal: 0,
+    failed: false,
   };
 }
 
@@ -135,14 +167,26 @@ function moveBeacon(missions, x, z) {
   missions.beacon.position.set(x, 0, z);
 }
 
+function startStepTimer(missions, step) {
+  if (step.type === 'timed' || step.type === 'survive') {
+    missions.timer = step.seconds;
+    missions.timerTotal = step.seconds;
+  } else {
+    missions.timer = 0;
+    missions.timerTotal = 0;
+  }
+}
+
 /** Start mission `index` for the world: brief the player, place the marker. */
 export function startMission(world, index) {
   const missions = world.missions;
   missions.index = index;
   missions.step = 0;
   missions.active = true;
+  missions.failed = false;
   const mission = MISSIONS[index];
   missions.banner = { title: mission.title, sub: mission.briefing };
+  startStepTimer(missions, mission.steps[0]);
   if (index === 1) {
     const car = spawnCar(world.scene, 'sport', 0xc23b2e, -88, 88, Math.PI / 2);
     world.allCars.push(car);
@@ -150,10 +194,28 @@ export function startMission(world, index) {
     moveBeacon(missions, -88, 88);
   } else if (index === 2) {
     moveBeacon(missions, 176, -132);
+  } else if (index === 4) {
+    addWanted(world.police, 5);
+    moveBeacon(missions, null, null);
   } else {
     moveBeacon(missions, mission.steps[0].x, mission.steps[0].z);
   }
   world.audio.jingle();
+}
+
+/** Fail the active job (clock ran out, or Mara was caught mid-job). */
+export function failMission(world, reason) {
+  const missions = world.missions;
+  if (!missions.active) return;
+  missions.active = false;
+  missions.failed = true;
+  missions.timer = 0;
+  missions.timerTotal = 0;
+  clearRivals(world.scene, world.combat);
+  moveBeacon(missions, null, null);
+  missions.banner = { title: 'MISSION FAILED', sub: reason };
+  world.audio.denied();
+  world.nextMissionAt = world.time + 12;
 }
 
 /** Advance the mission state machine; returns 'done' when a job completes. */
@@ -193,6 +255,22 @@ export function updateMissions(dt, world) {
     if (world.police.wanted === 0) advance = true;
   } else if (step.type === 'clear') {
     if (rivalsAlive(world.combat) === 0) advance = true;
+  } else if (step.type === 'timed') {
+    missions.timer -= dt;
+    if (missions.timer <= 10 && missions.timer > 0 && Math.ceil(missions.timer) !== Math.ceil(missions.timer + dt)) {
+      world.audio.alarm();
+    }
+    if (missions.timer <= 0) {
+      failMission(world, 'Too slow — Dax gave the run to someone else.');
+      return 'failed';
+    }
+    if (Math.hypot(pos.x - step.x, pos.z - step.z) < 7) advance = true;
+  } else if (step.type === 'survive') {
+    missions.timer -= dt;
+    if (missions.timer <= 10 && missions.timer > 0 && Math.ceil(missions.timer) !== Math.ceil(missions.timer + dt)) {
+      world.audio.alarm();
+    }
+    if (missions.timer <= 0) advance = true;
   }
   if (!advance) return null;
   missions.step += 1;
@@ -213,10 +291,11 @@ export function updateMissions(dt, world) {
     return 'done';
   }
   const next = mission.steps[missions.step];
+  startStepTimer(missions, next);
   if (next.type === 'clear') {
     spawnRivals(world.scene, world.combat, RIVAL_SPOTS);
     moveBeacon(missions, 176, -132);
-  } else if (next.type === 'escape') {
+  } else if (next.type === 'escape' || next.type === 'survive') {
     moveBeacon(missions, null, null);
   } else {
     moveBeacon(missions, next.x, next.z);

@@ -1,6 +1,8 @@
-// The HUD and the menus: wanted stars, cash, health, speed, mission
-// objective, banners, toasts, the start screen, pause, busted and wasted.
+// The HUD and the menus: wanted stars, cash, health, speed, the day/night
+// clock, the mission timer, the objective, prompts, banners, toasts, the
+// district toast, the start screen, pause, busted and wasted.
 import { TUNING } from './config.js';
+import { clockText, timeLabel } from './daynight.js';
 import { currentObjective } from './missions.js';
 import { playerPosition, playerSpeed } from './player.js';
 import { drawMinimap } from './minimap.js';
@@ -14,6 +16,10 @@ export function createHUD() {
     root: el('hud'),
     stars: el('stars'),
     cash: el('cash'),
+    clock: el('clock'),
+    timer: el('timer'),
+    district: el('district'),
+    prompt: el('prompt'),
     objectiveTitle: el('objective-title'),
     objectiveText: el('objective-text'),
     objectiveDist: el('objective-dist'),
@@ -34,6 +40,8 @@ export function createHUD() {
     minimap: el('minimap'),
     bannerUntil: 0,
     toastUntil: 0,
+    districtUntil: 0,
+    lastDistrict: null,
     toast(text) {
       hud.toastEl.textContent = text;
       hud.toastEl.classList.add('show');
@@ -58,7 +66,7 @@ export function createHUD() {
       const btn = el('btn-continue');
       if (save) {
         btn.classList.remove('hidden');
-        info.textContent = `Saved game — $${save.cash} · ${save.storyDone ? 'story complete' : `mission ${save.missionIndex + 1} of 3`} · ${save.stashesTaken.length}/8 stashes`;
+        info.textContent = `Saved game — $${save.cash} · ${save.storyDone ? 'story complete' : `mission ${save.missionIndex + 1} of 5`} · ${save.stashesTaken.length}/12 stashes`;
       } else {
         btn.classList.add('hidden');
         info.textContent = 'No saved game yet.';
@@ -83,6 +91,7 @@ export function createHUD() {
       const now = performance.now();
       if (now > hud.bannerUntil) hud.banner.classList.remove('show');
       if (now > hud.toastUntil) hud.toastEl.classList.remove('show');
+      if (now > hud.districtUntil) hud.district.classList.remove('show');
       if (world.missions.banner) {
         hud.showBanner(world.missions.banner.title, world.missions.banner.sub);
         world.missions.banner = null;
@@ -93,6 +102,30 @@ export function createHUD() {
       hud.stars.textContent = stars;
       hud.stars.classList.toggle('hot', wanted > 0);
       hud.cash.textContent = `$${world.player.cash}`;
+      if (world.daynight) {
+        hud.clock.textContent = `${clockText(world.daynight)} · ${timeLabel(world.daynight)}`;
+      }
+      // Mission timer: counts down during timed and survive steps, red
+      // under ten seconds.
+      if (world.missions.active && world.missions.timerTotal > 0) {
+        const t = Math.max(0, world.missions.timer);
+        hud.timer.textContent = `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+        hud.timer.classList.add('show');
+        hud.timer.classList.toggle('urgent', t <= 10);
+      } else {
+        hud.timer.classList.remove('show', 'urgent');
+      }
+      // District toast: only when the player crosses a border, never on
+      // the first frame.
+      const district = world.districtNow ?? null;
+      if (district) {
+        if (hud.lastDistrict !== null && district !== hud.lastDistrict && world.screen === 'play') {
+          hud.district.textContent = district;
+          hud.district.classList.add('show');
+          hud.districtUntil = performance.now() + 2400;
+        }
+        hud.lastDistrict = district;
+      }
       const health = Math.max(0, Math.round(world.player.health));
       hud.healthBar.style.width = `${health}%`;
       hud.healthBar.classList.toggle('low', health < 30);
@@ -115,14 +148,26 @@ export function createHUD() {
         hud.objectiveTitle.textContent = 'FREE ROAM';
         hud.objectiveText.textContent = 'The city is yours — stashes, cars and trouble await.';
         hud.objectiveDist.textContent = '';
+      } else if (world.missions.failed && world.nextMissionAt !== null) {
+        hud.objectiveTitle.textContent = 'MISSION FAILED';
+        hud.objectiveText.textContent = 'Dax will call again shortly.';
+        hud.objectiveDist.textContent = `Next job in ${Math.max(0, Math.ceil(world.nextMissionAt - world.time))}s`;
       } else {
         hud.objectiveTitle.textContent = 'FREE ROAM';
         hud.objectiveText.textContent = 'Your next job from Dax starts shortly — explore the city.';
         hud.objectiveDist.textContent = '';
       }
+      // Context prompt: the garage's offer wins over the controls reminder.
+      const garagePrompt = world.garage ? world.garage.prompt : null;
+      if (garagePrompt) {
+        hud.prompt.textContent = garagePrompt;
+        hud.prompt.classList.add('show');
+      } else {
+        hud.prompt.classList.remove('show');
+      }
       hud.hint.textContent = driving
-        ? 'W/S drive · A/D steer · SPACE handbrake · E exit car · M mute · ESC pause'
-        : 'WASD move · SHIFT run · drag mouse to look · CLICK shoot · R reload · E enter car · ESC pause';
+        ? 'W/S drive · A/D steer · SPACE handbrake · E exit · G garage · ESC pause'
+        : 'WASD move · SHIFT run · mouse look · CLICK shoot · E car · G garage · ESC pause';
       drawMinimap(hud.minimap, world);
     },
   };

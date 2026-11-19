@@ -1,7 +1,10 @@
 // Save / load through localStorage: cash, mission progress, player position
 // and collected stashes. Storage may be unavailable; then progress lasts
-// only for the visit.
+// only for the visit. Version 2: five missions and twelve stashes; the
+// save key changed with it, so v1 saves do not carry over.
 import { SAVE_KEY, START_CASH } from './config.js';
+
+const SAVE_VERSION = 2;
 
 export function freshSave() {
   return {
@@ -11,7 +14,7 @@ export function freshSave() {
     stashesTaken: [],
     player: { x: 0, z: 88, heading: Math.PI },
     storyDone: false,
-    version: 1,
+    version: SAVE_VERSION,
   };
 }
 
@@ -20,7 +23,7 @@ export function loadSave() {
     const raw = window.localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw);
-    if (!data || data.version !== 1 || typeof data.cash !== 'number') return null;
+    if (!data || data.version !== SAVE_VERSION || typeof data.cash !== 'number') return null;
     return { ...freshSave(), ...data };
   } catch {
     return null;
@@ -29,7 +32,7 @@ export function loadSave() {
 
 export function writeSave(data) {
   try {
-    window.localStorage.setItem(SAVE_KEY, JSON.stringify({ ...data, version: 1 }));
+    window.localStorage.setItem(SAVE_KEY, JSON.stringify({ ...data, version: SAVE_VERSION }));
     return true;
   } catch {
     return false;

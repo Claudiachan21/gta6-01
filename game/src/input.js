@@ -27,6 +27,21 @@ export function createInput(canvas) {
     wasPressed(code) {
       return pressed.has(code);
     },
+    /**
+     * True if any of `codes` was pressed since the last frame — and consume
+     * the press, so a later fixed step in the same frame does not see it
+     * again (one E press = one enter/exit, even at low frame rates).
+     */
+    takePressed(codes) {
+      let hit = false;
+      for (const code of codes) {
+        if (pressed.has(code)) {
+          hit = true;
+          pressed.delete(code);
+        }
+      }
+      return hit;
+    },
     mouseWasPressed() {
       return mousePressed;
     },

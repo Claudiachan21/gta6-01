@@ -1,5 +1,6 @@
 // Synthesised sound: no audio files ship with the game. Engine hum, siren,
-// gunshots, UI blips and a small bass-and-hats groove are all built from
+// gunshots, UI blips, the cash-register cha-ching of a sale, the mission
+// timer's alarm and a small bass-and-hats groove are all built from
 // WebAudio oscillators and filtered noise.
 export function createAudio() {
   let ctx = null;
@@ -134,6 +135,15 @@ export function createAudio() {
     },
     click() {
       blip(520, 0.06, 'sine', 0.15);
+    },
+    /** Cash-register cha-ching when Lena buys a car or takes a bribe. */
+    chaChing() {
+      blip(1180, 0.09, 'triangle', 0.28);
+      setTimeout(() => blip(1560, 0.22, 'triangle', 0.28), 80);
+    },
+    /** A short warning beep as a mission timer runs down. */
+    alarm() {
+      blip(880, 0.12, 'square', 0.12);
     },
     jingle() {
       [523, 659, 784, 1047].forEach((freq, i) => {

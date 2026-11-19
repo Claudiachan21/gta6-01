@@ -1,10 +1,16 @@
-// Solmar Bay, a gta6-01 entry (Node 22, standard library only): an original open-world
+// Solmar Bay v2, a gta6-01 entry (Node 22, standard library only): an original open-world
 // crime game in this directory's game/ folder — plain static files a desktop browser loads
 // offline (game/index.html and its ES modules, three.js vendored as game/vendor/three.module.min.js,
 // no network request). The program hands it in: it copies game/ and screenshots/ from beside
 // this file to /output and writes /output/dossier.json, the summary the judge reads, with the
-// vendored make.fun library. Four screenshots (the first by name is the cover) show the city,
-// a police chase, a mission and a firefight.
+// vendored make.fun library. Four screenshots (the first by name is the cover) show the city
+// at golden hour, a police chase with a roadblock, a timed mission and a night firefight.
+//
+// v2 adds a day/night cycle, the Sunset Auto garage (sell stolen cars, pay off heat), two new
+// missions (a timed delivery and a five-star getaway finale), two new vehicles (pickup and
+// muscle car), landmarks (lighthouse, harbor cranes, pier and Ferris wheel, stadium, plaza),
+// nine named districts, livelier police (roadblocks, intercept steering) and pedestrians
+// (chatting pairs), and 12 cash stashes.
 //
 // Serve it locally with `node serve.ts`, then open http://localhost:8080.
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:

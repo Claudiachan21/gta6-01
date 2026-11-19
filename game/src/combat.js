@@ -1,5 +1,7 @@
 // Combat: Mara's pistol (aim with the mouse, click to fire, R to reload),
-// rival crew members who shoot back, muzzle flash and hit sparks.
+// rival crew members who shoot back, muzzle flash and hit sparks. Rivals
+// strafe sideways between shots, so a firefight moves instead of standing
+// still.
 import * as THREE from 'three';
 import { TUNING } from './config.js';
 import { knockPedDown, scatterPeds } from './pedestrians.js';
@@ -58,8 +60,12 @@ export function spawnRivals(scene, combat, positions) {
     scene.add(mesh);
     combat.rivals.push({
       mesh,
+      homeX: p.x,
+      homeZ: p.z,
       health: TUNING.rivalHealth,
       shootTimer: 1 + Math.random(),
+      strafeTimer: 0.8 + Math.random(),
+      strafeDir: 0,
       alive: true,
       hitFlash: 0,
     });
@@ -133,7 +139,7 @@ export function firePistol(world) {
   return true;
 }
 
-/** Rivals aim at Mara and shoot with loose aim; returns damage dealt. */
+/** Rivals aim at Mara, strafe between shots, and shoot with loose aim. */
 export function updateRivals(dt, world) {
   const combat = world.combat;
   const pos = playerPosition(world.player);
@@ -146,6 +152,22 @@ export function updateRivals(dt, world) {
     if (rival.hitFlash > 0) {
       rival.hitFlash -= dt;
       rival.mesh.children[0].material.emissive.setHex(rival.hitFlash > 0 ? 0x661111 : 0x000000);
+    }
+    // Strafe: sidestep left or right for a second or two, staying near
+    // home so the fight does not wander off across the yard.
+    rival.strafeTimer -= dt;
+    if (rival.strafeTimer <= 0) {
+      rival.strafeTimer = 1 + Math.random() * 1.6;
+      rival.strafeDir = Math.random() < 0.5 ? -1 : 1;
+      const homeDist = Math.hypot(rp.x - rival.homeX, rp.z - rival.homeZ);
+      if (homeDist > 6) rival.strafeDir = 0;
+    }
+    if (rival.strafeDir !== 0 && dist < 45) {
+      const face = Math.atan2(pos.x - rp.x, pos.z - rp.z);
+      const sideX = Math.cos(face) * rival.strafeDir;
+      const sideZ = -Math.sin(face) * rival.strafeDir;
+      rp.x += sideX * 2.2 * dt;
+      rp.z += sideZ * 2.2 * dt;
     }
     if (dist > 45) continue;
     rival.shootTimer -= dt;

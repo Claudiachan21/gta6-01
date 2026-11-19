@@ -1,6 +1,7 @@
 // Ground, water, mountains and street props. The ground is one big plane
 // painted by a canvas texture: asphalt streets with dashes and crosswalks,
-// sidewalks, parks and parking lots, all aligned with the city layout.
+// sidewalks, parks, parking lots and the landmark aprons, all aligned with
+// the city layout.
 import * as THREE from 'three';
 import { BLOCK_CENTERS, COLORS, STREETS, WORLD_HALF } from './config.js';
 
@@ -36,6 +37,28 @@ function groundTexture(layout) {
       ctx.strokeRect(toPx(lot.x + i * 5 - 2.4), toPx(lot.z + 3), 4.8 * SCALE, 9 * SCALE);
     }
   }
+  // Landmark aprons: the stadium's green pitch, the harbor's concrete,
+  // the plaza's stone and the garage's asphalt yard.
+  for (const block of layout.landmarkBlocks) {
+    if (block.kind === 'stadium') {
+      ctx.fillStyle = '#4d9e57';
+      ctx.beginPath();
+      ctx.arc(toPx(block.x), toPx(block.z), 14 * SCALE, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (block.kind === 'harbor') {
+      ctx.fillStyle = '#9a958a';
+      ctx.fillRect(toPx(block.x - 16), toPx(block.z - 16), 32 * SCALE, 32 * SCALE);
+    } else if (block.kind === 'plaza') {
+      ctx.fillStyle = '#d9d2c0';
+      ctx.fillRect(toPx(block.x - 16), toPx(block.z - 16), 32 * SCALE, 32 * SCALE);
+      ctx.strokeStyle = '#b9b3a4';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(toPx(block.x - 12), toPx(block.z - 12), 24 * SCALE, 24 * SCALE);
+    } else if (block.kind === 'garage') {
+      ctx.fillStyle = '#8f8a80';
+      ctx.fillRect(toPx(block.x - 16), toPx(block.z - 16), 32 * SCALE, 32 * SCALE);
+    }
+  }
   for (const s of STREETS) {
     ctx.fillStyle = '#b9b3a4';
     ctx.fillRect(0, toPx(s - 9), TEX, 18 * SCALE);
@@ -47,6 +70,10 @@ function groundTexture(layout) {
   ctx.fillStyle = '#e8c832';
   for (const s of STREETS) {
     for (let v = -WORLD_HALF + 8; v < WORLD_HALF - 8; v += 11) {
+      // No centre dashes through intersections: real roads leave the
+      // crossing clear (the crosswalks mark it), and crossed dashes
+      // read as a giant yellow plus from the low chase camera.
+      if (STREETS.some((t) => Math.abs(v - t) < 9)) continue;
       ctx.fillRect(toPx(v), toPx(s - 0.4), 5 * SCALE, 0.8 * SCALE);
       ctx.fillRect(toPx(s - 0.4), toPx(v), 0.8 * SCALE, 5 * SCALE);
     }
@@ -155,7 +182,11 @@ export function buildGround(scene, layout) {
   return group;
 }
 
-/** Street lamps along the avenues and palm trees in parks and by the beach. */
+/**
+ * Street lamps along the avenues and palm trees in parks and by the beach.
+ * Returns the lamp-head material so the day/night cycle can make the
+ * lamps glow after dark.
+ */
 export function buildProps(scene, layout, rng) {
   const group = new THREE.Group();
   const lampPole = new THREE.CylinderGeometry(0.12, 0.16, 7, 6);
@@ -208,5 +239,5 @@ export function buildProps(scene, layout, rng) {
   group.add(trunks);
   group.add(crowns);
   scene.add(group);
-  return group;
+  return { group, lampHeadMaterial: headMaterial };
 }
